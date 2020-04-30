@@ -49,6 +49,48 @@ struct opt_tab compile_opts [] = {
 	{ "PCRE2_UTF", PCRE2_UTF },
 };
 int n_compile_opts = sizeof(compile_opts) / sizeof(struct opt_tab);
+
+
+/**
+ * @param Create a pointer from a base 16 encoded string
+ *
+ * We pass pointers out to M as strings, and deode strings from M into pointers.
+ * This function does the decode.  We use strtoull to make sure to have enough bits.
+ *
+ * @param pstr A pointer value encoded as a base 16 string
+ *
+ * @return A void pointer which must be cast or NULL on failure
+ */
+static void *pointer_decode(const char *pstr) {
+
+	char *endstr;		/* pointer to where strtoull left off */
+	void *outptr;
+
+	outptr = (void *) strtoull(pstr, &endstr, 16);
+	if (! (*pstr != '\0') && (*endstr == '\0') ) {
+		fprintf(stderr, "Cannot convert %s to a pointer\n", pstr);
+			return NULL;
+	}
+
+	return outptr;
+}
+
+/**
+ * @param Create a base 16 encoded string from a pointer
+ *
+ * We pass pointers out to M as strings, and deode strings from M into pointers.
+ * This function does the encode.
+ *
+ * @param ptr The pointer value to encode
+ * @param buf String storage
+ * @param size Size of storage
+ *
+ * @return A void pointer which must be cast or NULL on failure
+ */
+static void pointer_encode(void *ptr, char *buf, int size) {
+
+	snprintf(buf, size, "%p", ptr);
+}
 	
 /**
  * @brief Pcre2 compatibile wrapper for M malloc()
@@ -251,49 +293,71 @@ gtm_long_t regexp(int argc, gtm_string_t *regexp, gtm_string_t *subject, gtm_str
 
 }
 
+/**
+ * @brief Wrapper for M calls to pcre2_compile
+ *
+ * This function serves as a wrapper so M can call pcre2_compile().
+ * The parameters are similar to the C call, but since we use an M string,
+ * for the pattern, we know the length, and don't have to pass that as a
+ * separate parameter. 
+ * 
+ * In general, refer to the PCRE2 documentation for a fuller description
+ * of these parameters.  The handle returned on success will be a base64
+ * encoded pointer.
+ *
+ * @param count M API supplied count of arguments to this function
+ * @param pattern The regular expression we are compiling
+ * @param options Compile options
+ * @param errorcode Output parameter to return an error if compile fails
+ * @param erroroffset Output parameter indicating the byte offset of a compile failure
+ * @param ccontext_str Compile context for compile, "0" for defaults
+ *
+ * @return A handle for this compiled pattern or a null string on failure
+ */
 gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options,
 	gtm_long_t *errorcode, gtm_ulong_t *erroroffset, gtm_char_t *ccontext_str) {
 
-	static char result[32];
-	pcre2_code *code;
 	int ecode;
 	PCRE2_SIZE eoffset;
 	uint32_t compile_options;
 	pcre2_compile_context *ccontext;
-	char *endstring;
+	char *null_string = "";
+	pcre2_code *code;		/* our compiled pattern */
+	static char result[32];		/* must be able to hold a hex encoded 64-bit pointer */
 	int must_free_ccontext;
 
 	if(initialize() < 0) {
-		result[0] = '\0';
-		return result;
+		return null_string;
 	}
-
-	if ( parse_compile_options(options, &compile_options) < 0) {
-		result[0] = '\0';
-		return result;
-	}
-
-	      //pcre2_code *pcre2_compile(PCRE2_SPTR pattern, PCRE2_SIZE length,
-	       //        uint32_t options, int *errorcode, PCRE2_SIZE *erroroffset,
-		//                pcre2_compile_context *ccontext);
 
 	/*
-	 * We don't really need a compile context as we are not setting options here
-	 * However, we do want the M malloc/free functions to be used.  If we are
-	 * supplied a compile context, use that instead, and do not free it.
+	 * If custom compile option strings are passed in, we must
+	 * map them from string format to internal format
+	 */
+	if ( parse_compile_options(options, &compile_options) < 0) {
+		return null_string;
+	}
+
+
+	/*
+	 * If we are not supplied a compile context, we must create one.  This
+	 * solely due to the fact that we want to use the M malloc() & free() functions
+	 * to play more nicely with the M environment.
+	 * 
+	 * If we *are* supplied a compile context, we use that instead, and do not
+	 * gratuitously free it.  We test this by seeing if we were passed something
+	 * other than a "0".  (We do not attempt to further validate a non "0")
 	 */
 	if (strcmp(ccontext_str, "0") == 0) {
 		ccontext = pcre2_compile_context_create(gcontext);
 		must_free_ccontext = 1;
 	} else {
-		ccontext = (pcre2_compile_context *) strtoull(ccontext_str, &endstring, 16);
-		if (! (*ccontext_str != '\0') && (*endstring == '\0') ) {
-			fprintf(stderr, "ccontext_str %s is not parsable\n", ccontext_str);
-			result[0] = '\0';
-			return result;
-		}
+		ccontext = (pcre2_compile_context *) pointer_decode(ccontext_str);
 	}
 
+	/*
+	 * Now actually compile the pattern
+	 */
 	code = pcre2_compile( (PCRE2_SPTR) (pattern->address), (PCRE2_SIZE) (pattern->length),
 		compile_options, &ecode, &eoffset, ccontext);
 
@@ -301,10 +365,42 @@ gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options
 		pcre2_compile_context_free(ccontext);
 	}
 
-	snprintf(result, sizeof(result), "%p", code);
+	*erroroffset = eoffset;
+	*errorcode = ecode;
+	fprintf(stderr, "eoff = %ld, ecode = %d, ptr %p\n", eoffset, ecode,code);
 
+	if (!code) {
+		return null_string;
+	}
+
+	pointer_encode(code, result, sizeof(result));
 	return result;
 
 }
 
-//pcre2_code *pcre2_compile(PCRE2_SPTR pattern, PCRE2_SIZE length, uint32_t options, int *errorcode, PCRE2_SIZE *erroroffset, pcre2_compile_context *ccontext);
+/**
+ * @brief Translate a pcre2_compile() error code into a text message
+ *
+ * This function provides an M interface to translate a pcre2_compile() error code to a
+ * string.  The interface differs a bit from the C function wrapped as the M string
+ * supplies its own (max) length.
+ *
+ * @param count M API supplied argument count
+ * @param errorcode Code to be mapped to a string
+ *
+ */
+gtm_long_t mpcre2_get_error_message(int count, gtm_long_t errorcode, gtm_string_t *buffer) {
+
+	gtm_long_t res;
+
+	res = pcre2_get_error_message( (int) errorcode, (PCRE2_UCHAR *) buffer->address,
+		buffer->length);
+
+	if (res < 0) {
+		buffer->length = 0;
+	} else {
+		buffer->length = res;
+	}
+
+	return res;
+}
