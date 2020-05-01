@@ -11,12 +11,15 @@ static void (*free_fn)(void*);
 static void *m_pcre2_malloc(PCRE2_SIZE, void *);
 static void m_pcre2_free(void *, void *);
 
-static pcre2_general_context *gcontext;
+static pcre2_general_context *global_gcontext;
+static pcre2_match_context *global_mcontext;
 
-struct opt_tab {
+typedef struct opt_tab {
 	const char *name;
 	uint32_t val;
-};
+} opt_tab_t;
+
+static char *null_string = "";
 
 struct opt_tab compile_opts [] = {
 	{ "PCRE2_ANCHORED", PCRE2_ANCHORED },
@@ -50,6 +53,19 @@ struct opt_tab compile_opts [] = {
 };
 int n_compile_opts = sizeof(compile_opts) / sizeof(struct opt_tab);
 
+struct opt_tab match_opts [] = {
+	{ "PCRE2_ANCHORED", PCRE2_ANCHORED },
+	{ "PCRE2_ENDANCHORED", PCRE2_ENDANCHORED },
+	{ "PCRE2_NOTBOL", PCRE2_NOTBOL },
+	{ "PCRE2_NOTEOL", PCRE2_NOTEOL },
+	{ "PCRE2_NOTEMPTY", PCRE2_NOTEMPTY },
+	{ "PCRE2_NOTEMPTY_ATSTART", PCRE2_NOTEMPTY_ATSTART },
+	{ "PCRE2_NO_JIT", PCRE2_NO_JIT },
+	{ "PCRE2_NO_UTF_CHECK", PCRE2_NO_UTF_CHECK },
+	{ "PCRE2_PARTIAL_HARD", PCRE2_PARTIAL_HARD },
+	{ "PCRE2_PARTIAL_SOFT", PCRE2_PARTIAL_SOFT },
+};
+int n_match_opts = sizeof(match_opts) / sizeof(struct opt_tab);
 
 /**
  * @param Create a pointer from a base 16 encoded string
@@ -165,10 +181,16 @@ static int initialize () {
 	 * we can create our general context
 	 */
 
-	gcontext = pcre2_general_context_create(m_pcre2_malloc, m_pcre2_free, NULL);
+	global_gcontext = pcre2_general_context_create(m_pcre2_malloc, m_pcre2_free, NULL);
 
-	if (!gcontext) {
-		fprintf(stderr, "Unable to allocate general context\n");
+	if (!global_gcontext) {
+		fprintf(stderr, "Unable to allocate global general context\n");
+		return -1;
+	}
+
+	global_mcontext = pcre2_match_context_create(global_gcontext);
+	if (!global_mcontext) {
+		fprintf(stderr, "Unable to allocate global match context\n");
 		return -1;
 	}
 
@@ -251,6 +273,84 @@ static int parse_compile_options(char *options, uint32_t *result) {
 	return 0;
 }
 
+
+/**
+ * @brief Turn pcre2_match options presented as a C string into an integer
+ *
+ * Normally, when using pcre2_match() in C, the options are presented as
+ * a bitmap constructed by logically ORing macros.  When the options come in
+ * from M, they are a string that looks the same as the C interface, but which
+ * must be parsed out since this is not easily done on the M side.
+ *
+ * This means we are called with strings like:
+ * 
+ *	"PCRE2_ANCHORED|PCRE2_ENDANCHORED|PCRE2_NOTBOL"
+ *
+ * If an error is encountered, -1 will be returned, otherwise the indicated
+ * logical OR will be.
+ *
+ * Really this function is identical to parse_compile_options() and the two should
+ * be unified.
+ *
+ * @param options A null terminated C string indicating flags.
+ * @param result  Pointer to the storage for the ORed flags result
+ *
+ * @return The indicated logical OR value or -1 on error
+ * 
+ */
+static int parse_match_options(char *options, uint32_t *result) {
+
+	size_t len;
+	char *saveptr;
+	char *token;
+	uint32_t res = 0;
+	int i;
+	char *cpt;
+	int found;
+
+	/*
+	 * It is possible that options are 0, in which case we don't have to do
+	 * much.
+	 */
+	if((sscanf(options, "%d", &i) == 1) && (i == 0)) {
+		fprintf(stderr, "O (%s) OPT\n", options);
+		*result = 0;
+		return 0;
+	}
+
+	/*
+	 * Otherwise, we need to copy options so we can process with strtok_r()
+	 */
+	len = strlen(options);
+	cpt = malloc_fn(len + 1);
+	if (!cpt) {
+		return -1;
+	}
+	strncpy(cpt, options, len + 1);
+
+	while ( (token = strtok_r(cpt, "|", &saveptr)) ) {
+
+		found = 0;
+		for(i = 0; i < n_match_opts; i++) {
+			if (strcmp(token, match_opts[i].name) == 0) {
+				res |= match_opts[i].val;
+				found = 1;
+				break;
+			}
+		}
+
+		if (!found) {
+			fprintf(stderr, "Unknown match option %s\n", token);
+			return -1;
+		}
+
+		cpt = NULL;	/* signal strtok_r to continue last parse */
+	}
+
+	*result = res;
+	return 0;
+}
+
 gtm_long_t regexp(int argc, gtm_string_t *regexp, gtm_string_t *subject, gtm_string_t *out) {
 
 	int pcre2_err;
@@ -321,7 +421,6 @@ gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options
 	PCRE2_SIZE eoffset;
 	uint32_t compile_options;
 	pcre2_compile_context *ccontext;
-	char *null_string = "";
 	pcre2_code *code;		/* our compiled pattern */
 	static char result[32];		/* must be able to hold a hex encoded 64-bit pointer */
 	int must_free_ccontext;
@@ -349,7 +448,7 @@ gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options
 	 * other than a "0".  (We do not attempt to further validate a non "0")
 	 */
 	if (strcmp(ccontext_str, "0") == 0) {
-		ccontext = pcre2_compile_context_create(gcontext);
+		ccontext = pcre2_compile_context_create(global_gcontext);
 		must_free_ccontext = 1;
 	} else {
 		ccontext = (pcre2_compile_context *) pointer_decode(ccontext_str);
@@ -403,4 +502,111 @@ gtm_long_t mpcre2_get_error_message(int count, gtm_long_t errorcode, gtm_string_
 	}
 
 	return res;
+}
+
+/**
+ * @brief Wrap pcre2_code_free()
+ *
+ * We pass pcre2 code pointers back and forth to M as text.
+ * We need to re-create the code pointer and free it.
+ *
+ * @param count Count of parameters from M API
+ * @param code String value of a code pointer from M
+ *
+ * @return None
+ */
+void mpcre2_code_free(int count, gtm_char_t *code) {
+
+	pcre2_code *ptr;
+
+	ptr = (pcre2_code *) pointer_decode(code);
+
+	pcre2_code_free(ptr);
+}
+
+/**
+ * @brief Wrap pcre2_match_data_create_from_pattern()
+ *
+ * If we are called with a non "0" general context, use it.
+ * Otherwise we use our internal general context.
+ *
+ * @param count Count of parameters from the M API
+ * @param code A compiled pcre2 regular expression pointer in string format
+ * @param code A custom general context or "0" in string format
+ *
+ * @return A stringified match data pointer
+ */
+gtm_char_t *mpcre2_match_data_create_from_pattern(int count, gtm_char_t *code_str,
+	gtm_char_t *gcontext_str) {
+
+	pcre2_code *code;
+	pcre2_general_context *gc;
+	pcre2_match_data *md;
+	static char buf[32];
+
+	if(initialize() < 0) {
+		return null_string;
+	}
+
+	code = (pcre2_code *) pointer_decode(code_str);
+
+	if (strcmp(gcontext_str, "0") == 0) {
+		gc = global_gcontext;
+	} else {
+		gc = (pcre2_general_context *) pointer_decode(gcontext_str);
+	}
+
+	md = pcre2_match_data_create_from_pattern(code, gc);
+
+	pointer_encode((void *) md, buf, sizeof(buf));
+
+	return buf;
+}
+
+/**
+ * @brief wrap pcre2_match() for M
+ *
+ * We bring in "subject" as an M string, so we can have embedded zero bytes.  This gives
+ * us a length, so we don't have a separate parameter for that.
+ *
+ * @param count Count of parameters from the M API
+ * @param code_str A pcre2 compiled regular expression pointer in string format
+ * @param subject The string to search for matches
+ * @param startoffset The byte offset at which to start the match search
+ * @param options Pcre2 match options in string form
+ * @param match_data_str A Pcre2 match data pointer in string format
+ * @param mcontext_str A Pcre2 match context pointer in string format, or "0"
+ *
+ * @return < 0 on error or no match, 0 vector offests too small, else one more than the highest numbered capturing pair that has been set
+ */
+gtm_long_t mpcre2_match(int count, gtm_char_t *code_str, gtm_string_t *subject,
+	gtm_long_t startoffset, gtm_char_t *options_str, gtm_char_t *match_data_str,
+	gtm_char_t *mcontext_str) {
+
+	pcre2_code *code;
+	pcre2_match_data *match_data;
+	pcre2_match_context *mc;
+	uint32_t options;
+
+	if (initialize() < 0) {
+		return -1;
+	}
+
+	code = (pcre2_code *) pointer_decode(code_str);
+
+	if (parse_match_options(options_str, &options) < 0) {
+		return -1;
+	}
+
+	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	if (strcmp(mcontext_str, "0") == 0) {
+		mc = global_mcontext;
+	} else {
+		mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+	}
+
+	return(pcre2_match(code, (PCRE2_SPTR) subject->address, (PCRE2_SIZE) subject->length,
+		(PCRE2_SIZE) startoffset, options, match_data, mc));
+
 }
