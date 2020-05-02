@@ -199,10 +199,12 @@ static int initialize () {
 	return 0;
 }
 
+
+
 /**
- * @brief Turn pcre2_compile options presented as a C string into an integer
+ * @brief Turn various pcre2 options presented as C strings into integers
  *
- * Normally, when using pcre2_compile() in C, the options are presented as
+ * Normally, when using options in certain pcre2 functions, the options are presented as
  * a bitmap constructed by logically ORing macros.  When the options come in
  * from M, they are a string that looks the same as the C interface, but which
  * must be parsed out since this is not easily done on the M side.
@@ -214,13 +216,19 @@ static int initialize () {
  * If an error is encountered, -1 will be returned, otherwise the indicated
  * logical OR will be.
  *
+ * This parse function is used with several different option tables.
+ *
+ * @param option_table table mapping strings to bitmasks
+ * @param option_count number of entries in the option table
+ * @param opt_tag String to use as a label for this set of options in error messages
  * @param options A null terminated C string indicating flags.
  * @param result  Pointer to the storage for the ORed flags result
  *
  * @return The indicated logical OR value or -1 on error
  * 
  */
-static int parse_compile_options(char *options, uint32_t *result) {
+static int parse_pcre2_options(struct opt_tab *option_table, int option_count, char *opt_tag,
+	char *options, uint32_t *result) {
 
 	size_t len;
 	char *saveptr;
@@ -253,16 +261,17 @@ static int parse_compile_options(char *options, uint32_t *result) {
 	while ( (token = strtok_r(cpt, "|", &saveptr)) ) {
 
 		found = 0;
-		for(i = 0; i < n_compile_opts; i++) {
-			if (strcmp(token, compile_opts[i].name) == 0) {
-				res |= compile_opts[i].val;
+		for(i = 0; i < option_count; i++) {
+			if (strcmp(token, option_table[i].name) == 0) {
+				res |= option_table[i].val;
 				found = 1;
 				break;
 			}
 		}
 
 		if (!found) {
-			fprintf(stderr, "Unknown compile option %s\n", token);
+			fprintf(stderr, "Unknown %s option %s\n", opt_tag, token);
+			free_fn(cpt);
 			return -1;
 		}
 
@@ -270,86 +279,11 @@ static int parse_compile_options(char *options, uint32_t *result) {
 	}
 
 	*result = res;
+	free_fn(cpt);
 	return 0;
 }
 
 
-/**
- * @brief Turn pcre2_match options presented as a C string into an integer
- *
- * Normally, when using pcre2_match() in C, the options are presented as
- * a bitmap constructed by logically ORing macros.  When the options come in
- * from M, they are a string that looks the same as the C interface, but which
- * must be parsed out since this is not easily done on the M side.
- *
- * This means we are called with strings like:
- * 
- *	"PCRE2_ANCHORED|PCRE2_ENDANCHORED|PCRE2_NOTBOL"
- *
- * If an error is encountered, -1 will be returned, otherwise the indicated
- * logical OR will be.
- *
- * Really this function is identical to parse_compile_options() and the two should
- * be unified.
- *
- * @param options A null terminated C string indicating flags.
- * @param result  Pointer to the storage for the ORed flags result
- *
- * @return The indicated logical OR value or -1 on error
- * 
- */
-static int parse_match_options(char *options, uint32_t *result) {
-
-	size_t len;
-	char *saveptr;
-	char *token;
-	uint32_t res = 0;
-	int i;
-	char *cpt;
-	int found;
-
-	/*
-	 * It is possible that options are 0, in which case we don't have to do
-	 * much.
-	 */
-	if((sscanf(options, "%d", &i) == 1) && (i == 0)) {
-		fprintf(stderr, "O (%s) OPT\n", options);
-		*result = 0;
-		return 0;
-	}
-
-	/*
-	 * Otherwise, we need to copy options so we can process with strtok_r()
-	 */
-	len = strlen(options);
-	cpt = malloc_fn(len + 1);
-	if (!cpt) {
-		return -1;
-	}
-	strncpy(cpt, options, len + 1);
-
-	while ( (token = strtok_r(cpt, "|", &saveptr)) ) {
-
-		found = 0;
-		for(i = 0; i < n_match_opts; i++) {
-			if (strcmp(token, match_opts[i].name) == 0) {
-				res |= match_opts[i].val;
-				found = 1;
-				break;
-			}
-		}
-
-		if (!found) {
-			fprintf(stderr, "Unknown match option %s\n", token);
-			return -1;
-		}
-
-		cpt = NULL;	/* signal strtok_r to continue last parse */
-	}
-
-	*result = res;
-	return 0;
-}
 
 gtm_long_t regexp(int argc, gtm_string_t *regexp, gtm_string_t *subject, gtm_string_t *out) {
 
@@ -433,7 +367,8 @@ gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options
 	 * If custom compile option strings are passed in, we must
 	 * map them from string format to internal format
 	 */
-	if ( parse_compile_options(options, &compile_options) < 0) {
+	if ( parse_pcre2_options(compile_opts, n_compile_opts, "compile",
+		options, &compile_options) < 0) {
 		return null_string;
 	}
 
@@ -594,7 +529,7 @@ gtm_long_t mpcre2_match(int count, gtm_char_t *code_str, gtm_string_t *subject,
 
 	code = (pcre2_code *) pointer_decode(code_str);
 
-	if (parse_match_options(options_str, &options) < 0) {
+	if (parse_pcre2_options(match_opts, n_match_opts, "match", options_str, &options) < 0) {
 		return -1;
 	}
 
@@ -609,4 +544,21 @@ gtm_long_t mpcre2_match(int count, gtm_char_t *code_str, gtm_string_t *subject,
 	return(pcre2_match(code, (PCRE2_SPTR) subject->address, (PCRE2_SIZE) subject->length,
 		(PCRE2_SIZE) startoffset, options, match_data, mc));
 
+}
+
+/**
+ * @brief Wrap the pcre2_match_data_free() function
+ *
+ * @param count M API argument count
+ * @param match_data_str Stringified match data pointer
+ * 
+ * @return None
+ */
+void mpcre2_match_data_free(int count, gtm_char_t *match_data_str) {
+
+	pcre2_match_data *match_data;
+
+	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	pcre2_match_data_free(match_data);
 }
