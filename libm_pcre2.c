@@ -546,6 +546,59 @@ gtm_long_t mpcre2_match(int count, gtm_char_t *code_str, gtm_string_t *subject,
 
 }
 
+
+/**
+ * @brief wrap pcre2_dfa_match() for M
+ *
+ * We bring in "subject" as an M string, so we can have embedded zero bytes.  This gives
+ * us a length, so we don't have a separate parameter for that.  Additionally, there is
+ * no way, or reason to pass in a vector of ints for "workspace from M, so we simply accept
+ * a count, and allocate that many on the stack.
+ *
+ * @param count Count of parameters from the M API
+ * @param code_str A pcre2 compiled regular expression pointer in string format
+ * @param subject The string to search for matches
+ * @param startoffset The byte offset at which to start the match search
+ * @param options Pcre2 match options in string form
+ * @param match_data_str A Pcre2 match data pointer in string format
+ * @param mcontext_str A Pcre2 match context pointer in string format, or "0"
+ * @apram wscount Number of entries to create in the workspace vector
+ *
+ * @return < 0 on error or no match, 0 vector offests too small, else one more than the highest numbered capturing pair that has been set
+ */
+gtm_long_t mpcre2_dfa_match(int count, gtm_char_t *code_str, gtm_string_t *subject,
+	gtm_long_t startoffset, gtm_char_t *options_str, gtm_char_t *match_data_str,
+	gtm_char_t *mcontext_str, gtm_long_t wscount) {
+
+	pcre2_code *code;
+	pcre2_match_data *match_data;
+	pcre2_match_context *mc;
+	uint32_t options;
+	int workspace[wscount];
+
+	if (initialize() < 0) {
+		return -1;
+	}
+
+	code = (pcre2_code *) pointer_decode(code_str);
+
+	if (parse_pcre2_options(match_opts, n_match_opts, "match", options_str, &options) < 0) {
+		return -1;
+	}
+
+	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	if (strcmp(mcontext_str, "0") == 0) {
+		mc = global_mcontext;
+	} else {
+		mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+	}
+
+	return(pcre2_dfa_match(code, (PCRE2_SPTR) subject->address, (PCRE2_SIZE) subject->length,
+		(PCRE2_SIZE) startoffset, options, match_data, mc, workspace, (PCRE2_SIZE) wscount));
+
+}
+
 /**
  * @brief Wrap the pcre2_match_data_free() function
  *
