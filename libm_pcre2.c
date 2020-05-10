@@ -53,6 +53,10 @@ struct opt_tab compile_opts [] = {
 };
 int n_compile_opts = sizeof(compile_opts) / sizeof(struct opt_tab);
 
+/*
+ * This table has both match and substitute options, because pcre2_substitute()
+ * takes many of the match options
+ */
 struct opt_tab match_opts [] = {
 	{ "PCRE2_ANCHORED", PCRE2_ANCHORED },
 	{ "PCRE2_ENDANCHORED", PCRE2_ENDANCHORED },
@@ -64,6 +68,11 @@ struct opt_tab match_opts [] = {
 	{ "PCRE2_NO_UTF_CHECK", PCRE2_NO_UTF_CHECK },
 	{ "PCRE2_PARTIAL_HARD", PCRE2_PARTIAL_HARD },
 	{ "PCRE2_PARTIAL_SOFT", PCRE2_PARTIAL_SOFT },
+	{ "PCRE2_SUBSTITUTE_EXTENDED", PCRE2_SUBSTITUTE_EXTENDED },
+        { "PCRE2_SUBSTITUTE_GLOBAL", PCRE2_SUBSTITUTE_GLOBAL },
+	{ "PCRE2_SUBSTITUTE_OVERFLOW_LENGTH", PCRE2_SUBSTITUTE_OVERFLOW_LENGTH },
+	{ "PCRE2_SUBSTITUTE_UNKNOWN_UNSET", PCRE2_SUBSTITUTE_UNKNOWN_UNSET },
+	{ "PCRE2_SUBSTITUTE_UNSET_EMPTY", PCRE2_SUBSTITUTE_UNSET_EMPTY },
 };
 int n_match_opts = sizeof(match_opts) / sizeof(struct opt_tab);
 
@@ -614,4 +623,72 @@ void mpcre2_match_data_free(int count, gtm_char_t *match_data_str) {
 	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
 
 	pcre2_match_data_free(match_data);
+}
+
+/**
+* @brief Wrap the pcre2_substitute() function
+*
+* @param count M API argument count
+* @param code Handle for a compiled PCRE2 regular expression
+* @param subject The string in which to make the substitution
+* @param startoffset The byte offset in the subject to start checking for substitutions
+* @param options Match options as in pcre2_match()
+* @param match_data Match data handle as in pcre2_match()
+* @param mcontext Pcre2 match context handle
+* @param replacemnt The sting to substitute for matched text
+* @param outputbuffer Where to put the copy of the subject with the replacement(s)
+*
+* @return The number of substitutions or < 0 on error
+*
+*/
+gtm_long_t mpcre2_substitute(int count, gtm_char_t *code_str, gtm_string_t *subject,
+	gtm_long_t startoffset, gtm_char_t *options_str, gtm_char_t *match_data_str,
+	gtm_char_t *mcontext_str, gtm_string_t *replacement, gtm_string_t *outputbuffer, gtm_long_t *outputlengthptr) {
+
+	pcre2_code *code;
+	pcre2_match_data *match_data;
+	pcre2_match_context *mc;
+	uint32_t options;
+	PCRE2_SIZE outputlength;
+	int res;
+
+	if (initialize() < 0) {
+		return -1;
+	}
+
+	code = (pcre2_code *) pointer_decode(code_str);
+
+	if (parse_pcre2_options(match_opts, n_match_opts, "match", options_str, &options) < 0) {
+		return -1;
+	}
+
+	/*
+	 * If match_data_str is "0" set it to NULL
+	 */
+	if (strcmp(match_data_str, "0") == 0) {
+		match_data = NULL;
+	} else {
+		match_data = (pcre2_match_data *) pointer_decode(match_data_str);
+	}
+
+	if (strcmp(mcontext_str, "0") == 0) {
+		mc = global_mcontext;
+	} else {
+		mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+	}
+
+	outputlength = outputbuffer->length;
+	res = pcre2_substitute(code, (PCRE2_SPTR)subject->address, (PCRE2_SIZE) subject->length,
+		(PCRE2_SIZE) startoffset, options, match_data, mc, (PCRE2_SPTR) replacement->address,
+		(PCRE2_SIZE) replacement->length, (PCRE2_UCHAR *) outputbuffer->address, &outputlength);
+
+	if (res < 0) {
+		outputbuffer->length = 0;
+	} else {
+		outputbuffer->length = outputlength;
+	}
+
+	*outputlengthptr = (gtm_long_t) outputlength;
+
+	return res ;
 }
