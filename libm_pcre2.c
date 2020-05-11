@@ -76,6 +76,14 @@ struct opt_tab match_opts [] = {
 };
 int n_match_opts = sizeof(match_opts) / sizeof(struct opt_tab);
 
+struct opt_tab jit_opts [] = {
+	{ "PCRE2_JIT_COMPLETE", PCRE2_JIT_COMPLETE },
+	{ "PCRE2_JIT_PARTIAL_SOFT", PCRE2_JIT_PARTIAL_SOFT },
+	{ "PCRE2_JIT_PARTIAL_HARD", PCRE2_JIT_PARTIAL_HARD },
+};
+int n_jit_opts = sizeof(jit_opts) / sizeof(struct opt_tab);
+
+
 /**
  * @param Create a pointer from a base 16 encoded string
  *
@@ -233,7 +241,7 @@ static int initialize () {
  * @param options A null terminated C string indicating flags.
  * @param result  Pointer to the storage for the ORed flags result
  *
- * @return The indicated logical OR value or -1 on error
+ * @return 0 on success or -1 on error
  * 
  */
 static int parse_pcre2_options(struct opt_tab *option_table, int option_count, char *opt_tag,
@@ -243,28 +251,29 @@ static int parse_pcre2_options(struct opt_tab *option_table, int option_count, c
 	char *saveptr;
 	char *token;
 	uint32_t res = 0;
-	int i;
 	char *cpt;
+	char *save_cpt;
 	int found;
+	int i;
 
 	/*
-	 * It is possible that options are 0, in which case we don't have to do
-	 * much.
+	 * It is possible that options are 0, in which case we don't have to do much.
 	 */
-	if((sscanf(options, "%d", &i) == 1) && (i == 0)) {
-		fprintf(stderr, "O (%s) OPT\n", options);
+	if(strcmp(options, "0") == 0) {
 		*result = 0;
 		return 0;
 	}
 
 	/*
 	 * Otherwise, we need to copy options so we can process with strtok_r()
+	 * Note that we will set cpt = NULL in some cases, so we need to keep a copy to free
 	 */
 	len = strlen(options);
 	cpt = malloc_fn(len + 1);
 	if (!cpt) {
 		return -1;
 	}
+	save_cpt = cpt;
 	strncpy(cpt, options, len + 1);
 
 	while ( (token = strtok_r(cpt, "|", &saveptr)) ) {
@@ -280,7 +289,7 @@ static int parse_pcre2_options(struct opt_tab *option_table, int option_count, c
 
 		if (!found) {
 			fprintf(stderr, "Unknown %s option %s\n", opt_tag, token);
-			free_fn(cpt);
+			free_fn(save_cpt);
 			return -1;
 		}
 
@@ -288,10 +297,11 @@ static int parse_pcre2_options(struct opt_tab *option_table, int option_count, c
 	}
 
 	*result = res;
-	free_fn(cpt);
+
+	free_fn(save_cpt);
+
 	return 0;
 }
-
 
 
 gtm_long_t regexp(int argc, gtm_string_t *regexp, gtm_string_t *subject, gtm_string_t *out) {
@@ -691,4 +701,29 @@ gtm_long_t mpcre2_substitute(int count, gtm_char_t *code_str, gtm_string_t *subj
 	*outputlengthptr = (gtm_long_t) outputlength;
 
 	return res ;
+}
+
+/**
+ * @brief Wrap pcre2_jit_compile()
+ *
+ * 
+ * @param count Parameter count from M API
+ * @param code_str Handle for a previously compiled PCRE2 regular expression
+ * @param options_str JIT options
+ *
+ * @return 0 on success < 0 on error
+ *
+ */
+gtm_long_t mpcre2_jit_compile(int count, gtm_char_t *code_str, gtm_char_t *options_str) {
+
+	pcre2_code *code;
+	uint32_t options;
+
+	code = (pcre2_code *) pointer_decode(code_str);
+
+	if (parse_pcre2_options(jit_opts, n_jit_opts, "jit", options_str, &options) < 0) {
+		return -1;
+	}
+
+	return pcre2_jit_compile(code, options);
 }
