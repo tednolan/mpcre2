@@ -727,3 +727,79 @@ gtm_long_t mpcre2_jit_compile(int count, gtm_char_t *code_str, gtm_char_t *optio
 
 	return pcre2_jit_compile(code, options);
 }
+
+/**
+ * @brief wrap PCRE2_SPTR pcre2_get_mark()
+ *
+ * Note this text from the PCRE2 documentation:
+ *
+ *	After a successful match, a partial match
+ *	(PCRE2_ERROR_PARTIAL), or a failure to match
+ *	(PCRE2_ERROR_NOMATCH), a mark name may be
+ *	available. The function pcre2_get_mark()
+ *	can be called to access this name, which
+ *	can be specified in the pattern by any of
+ *	the backtracking control verbs, not just
+ *	(*MARK). The same function applies to all
+ *	the verbs. It returns a pointer to the
+ *	zero-terminated name, which is within the
+ *	compiled pattern. If no name is available,
+ *	NULL is returned. The length of the name
+ *	(excluding the terminating zero) is stored
+ *	in the code unit that precedes the name. You
+ *	should use this length instead of relying
+ *	on the terminating zero if the name might
+ *	contain a binary zero.
+ *
+ *  So we are given liberty to index *BACKWARD* from the
+ *  given string, as unusual as that might seem.  In fact
+ *  we do do this, so we can construct an M string which will
+ *  still be OK if it contains zero bytes.  Since we only handle
+ *  8 bit code units, the length must be <= 255.
+ *
+ * @param count Paramater count from the M API
+ * @param match_data_str A match data handle
+ *
+ * @return A mark name, or zero length string if none is available
+ *
+ */
+gtm_string_t *mpcre2_get_mark(int count, gtm_char_t *match_data_str) {
+
+	pcre2_match_data *match_data;
+	unsigned char mark_len;
+	char *mark_name;
+	static gtm_string_t ret;
+
+	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	mark_name = (char *) pcre2_get_mark(match_data);
+
+	ret.address = NULL;
+	ret.length = 0;
+
+	if (mark_name) {
+		ret.address = mark_name;
+		mark_len = (unsigned char) mark_name[-1];	/* see note in function header */
+		ret.length = (int) mark_len;
+	} 
+
+	return &ret;
+
+}
+
+/**
+ * @brief wrap pcre2_get_startchar()
+ *
+ * @param count Parameter count from M API
+ * @param match_data_str Match data handle
+ *
+ * @return Code unit offset of successful match
+ */
+gtm_long_t mpcre2_get_startchar(int count, char *match_data_str) {
+
+	pcre2_match_data *match_data;
+
+	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	return pcre2_get_startchar(match_data);
+}
