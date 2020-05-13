@@ -6,13 +6,8 @@
 #include <pcre2.h>
 #include "gtmxc_types.h"
 
-static void* (*malloc_fn)(int); 
-static void (*free_fn)(void*); 
-static void *m_pcre2_malloc(PCRE2_SIZE, void *);
-static void m_pcre2_free(void *, void *);
-
-static pcre2_general_context *global_gcontext;
-static pcre2_match_context *global_mcontext;
+static void* (*malloc_fn)(int);
+static void (*free_fn)(void*);
 
 typedef struct opt_tab {
 	const char *name;
@@ -85,47 +80,6 @@ int n_jit_opts = sizeof(jit_opts) / sizeof(struct opt_tab);
 
 
 /**
- * @param Create a pointer from a base 16 encoded string
- *
- * We pass pointers out to M as strings, and deode strings from M into pointers.
- * This function does the decode.  We use strtoull to make sure to have enough bits.
- *
- * @param pstr A pointer value encoded as a base 16 string
- *
- * @return A void pointer which must be cast or NULL on failure
- */
-static void *pointer_decode(const char *pstr) {
-
-	char *endstr;		/* pointer to where strtoull left off */
-	void *outptr;
-
-	outptr = (void *) strtoull(pstr, &endstr, 16);
-	if (! (*pstr != '\0') && (*endstr == '\0') ) {
-		fprintf(stderr, "Cannot convert %s to a pointer\n", pstr);
-			return NULL;
-	}
-
-	return outptr;
-}
-
-/**
- * @param Create a base 16 encoded string from a pointer
- *
- * We pass pointers out to M as strings, and deode strings from M into pointers.
- * This function does the encode.
- *
- * @param ptr The pointer value to encode
- * @param buf String storage
- * @param size Size of storage
- *
- * @return A void pointer which must be cast or NULL on failure
- */
-static void pointer_encode(void *ptr, char *buf, int size) {
-
-	snprintf(buf, size, "%p", ptr);
-}
-	
-/**
  * @brief Pcre2 compatibile wrapper for M malloc()
  *
  * @param size Number of bytes to allocate
@@ -149,34 +103,95 @@ static void m_pcre2_free(void *ptr, void *memory_data) {
 
 	free_fn(ptr);
 }
- 
+
+
 /**
- * @brief Get pointers to the M malloc & free functions
+ * @param Create a pointer from a base 16 encoded string
  *
- * This function based on an example in the GT.M Programmers Guide, sets us up
+ * We pass pointers out to M as strings, and deode strings from M into pointers.
+ * This function does the decode.  We use strtoull to make sure to have enough bits.
+ *
+ * @param pstr A pointer value encoded as a base 16 string
+ *
+ * @return A void pointer which must be cast or NULL on failure
+ */
+static void *pointer_decode(const char *pstr) {
+
+	void *outptr;
+
+	if (sscanf(pstr, "%p", &outptr) != 1) {
+		fprintf(stderr, "Cannot convert %s to a pointer\n", pstr);
+		return NULL;
+	}
+
+	return outptr;
+}
+
+/**
+ * @param Create a base 16 encoded string from a pointer
+ *
+ * We pass pointers out to M as strings, and deode strings from M into pointers.
+ * This function does the encode.
+ *
+ * @param ptr The pointer value to encode
+ * @param buf String storage
+ * @param size Size of storage
+ *
+ * @return A void pointer which must be cast or NULL on failure
+ */
+static void pointer_encode(void *ptr, char *buf, int size) {
+
+	snprintf(buf, size, "%p", ptr);
+}
+	
+/**
+ * @brief Get or create a general context
+ *
+ * PCRE2 uses the pcre2_general_context * type as the hook for replacing the
+ * system malloc()/free() functions with custom versions.  Since we want to play
+ * nice with M, we use this hook to install the M supplied versions.  The practical
+ * effect of this is that the first time a pcre2 function that needs to allocate memory
+ * is called, we set up a static pcre2_general context with the custom memory functions.
+ *
+ * Future requests for a general context return this one.  The exception is if we are
+ * passed an encoded handle from M, in which case we decode it as a pointer.  We don't
+ * actually expect this to happen.  Currently the general context created here is not
+ * freed, so that's a few bytes the M process will not get back.
+ *
+ * This function is based on an example in the GT.M Programmers Guide, sets us up
  * to use the M malloc() & free() functions, which is recommended for C code
  * called from M.  We could use names if we linked to the callin shared library,
  * but that would be * an additional dependency.
  *
- * It should be harmless to call this function more than once, but don't do that.
+ * @param general_context_str For "0" we create & return (or just return) the static GC.  Otherwise decode as a pointer
  *
- * @return 0 for success, -1 for an initialization error
+ * @return A pcre2_general_context pointer, or NULL on failure
  */
-static int initialize () {
+static pcre2_general_context *get_general_context (char *general_context_str) {
 
 	void **functable; 
-	char *start_address;
-	char *endstring;
-	static int initialize_done = 0;
+	char *start_address_str;
+	unsigned long long start_address;
+	static pcre2_general_context *default_gc = NULL;
 
-	if (initialize_done)
-		return 0;
+	start_address_str = getenv("GTM_CALLIN_START"); /* set by the M runtime */
+
+	/*
+	 * If they supply "0" or "NULL" use or create the default_gc * else decode it.
+	 */
+	if ( (strcmp(general_context_str, "0") != 0) && (strcmp(general_context_str, "NULL") != 0) ) {
+		return (pcre2_general_context *) pointer_decode(general_context_str);
+	} else if (default_gc) {
+		return default_gc;
+	}
+
+	/*
+	 * We have not been initialized, and have to do some setup
+	 */
  
-	start_address = getenv("GTM_CALLIN_START"); /* set by the M runtime */
- 
-	if (start_address == (char *)0) {
+	if (start_address_str == (char *)0) {
 		fprintf(stderr,"GTM_CALLIN_START is not set\n"); 
-		return -1;
+		return NULL;
 	} 
 
 	/*
@@ -184,11 +199,11 @@ static int initialize () {
 	 * for a pointer type.  We don't use functable unless the strtoull
 	 * "OK" condition is met. (per the man page).
 	 */
-	functable = (void **) strtoull(start_address, &endstring, 10);
-	if (! (*start_address != '\0') && (*endstring == '\0') ) {
+	if (sscanf(start_address_str, "%llu", &start_address) != 1) {
 		fprintf(stderr, "GTM_CALLIN_START is not parsable\n");
-		return -1;
+		return NULL;
 	}
+	functable = (void **) start_address;
 
 	malloc_fn = (void* (*)(int)) functable[4]; 
 	free_fn = (void (*)(void*)) functable[5]; 
@@ -198,24 +213,96 @@ static int initialize () {
 	 * we can create our general context
 	 */
 
-	global_gcontext = pcre2_general_context_create(m_pcre2_malloc, m_pcre2_free, NULL);
+	default_gc = pcre2_general_context_create(m_pcre2_malloc, m_pcre2_free, NULL);
 
-	if (!global_gcontext) {
+	if (!default_gc) {
 		fprintf(stderr, "Unable to allocate global general context\n");
-		return -1;
+		return NULL;
 	}
 
-	global_mcontext = pcre2_match_context_create(global_gcontext);
-	if (!global_mcontext) {
-		fprintf(stderr, "Unable to allocate global match context\n");
-		return -1;
-	}
-
-	initialize_done = 1;
- 
-	return 0;
+	return default_gc;
 }
 
+
+
+/**
+ * @brief Get or create a compile context
+ *
+ * If we are supplied "0" or "NULL", we create a generic compile context.
+ * Otherwise we decode the given context.
+ *
+ * If we created the context, we set the free flag, otherwise not
+ *
+ * @param context_str The incoming compile context handle
+ * @param must_free Pointer to our free flag
+ *
+ * @return a pcre2_compile_context pointer or NULL
+ * 
+ */
+pcre2_compile_context *get_compile_context(char *context_str, int *must_free) {
+	
+	pcre2_general_context *gc;
+	pcre2_compile_context *cc;
+
+	*must_free = 0;
+
+	if ( (strcmp(context_str, "0") != 0) && (strcmp(context_str, "NULL") != 0) ) {
+		*must_free = 0;
+		return (pcre2_compile_context *) pointer_decode(context_str);
+	}
+
+	gc = get_general_context("0");
+	cc = pcre2_compile_context_create(gc);
+
+	if (!cc) {
+		fprintf(stderr, "Can't allocate compile context!\n");
+		return NULL;
+	}
+
+	*must_free = 1;
+
+	return cc;
+}
+
+
+/**
+ * @brief Get or create a match context
+ *
+ * If we are supplied "0" or "NULL", we create a generic match context.
+ * Otherwise we decode the given context.
+ *
+ * If we created the context, we set the free flag, otherwise not
+ *
+ * @param context_str The incoming match context handle
+ * @param must_free Pointer to our free flag
+ *
+ * @return a pcre2_match_context pointer or NULL
+ * 
+ */
+pcre2_match_context *get_match_context(char *context_str, int *must_free) {
+	
+	pcre2_general_context *gc;
+	pcre2_match_context *mc;
+
+	*must_free = 0;
+
+	if ( (strcmp(context_str, "0") != 0) && (strcmp(context_str, "NULL") != 0) ) {
+		*must_free = 0;
+		return (pcre2_match_context *) pointer_decode(context_str);
+	}
+
+	gc = get_general_context("0");
+	mc = pcre2_match_context_create(gc);
+
+	if (!mc) {
+		fprintf(stderr, "Can't allocate match context!\n");
+		return NULL;
+	}
+
+	*must_free = 1;
+
+	return mc;
+}
 
 
 /**
@@ -303,49 +390,6 @@ static int parse_pcre2_options(struct opt_tab *option_table, int option_count, c
 	return 0;
 }
 
-
-gtm_long_t regexp(int argc, gtm_string_t *regexp, gtm_string_t *subject, gtm_string_t *out) {
-
-	int pcre2_err;
-	PCRE2_SIZE erroroffset;
-	pcre2_code *mypat;
-	pcre2_match_data *match_data;
-	int res;
-	PCRE2_SIZE ovcount;
-	PCRE2_SIZE *ovp;
-
-	fprintf(stderr, "Called argc = %d\n", argc);
-
-	mypat = pcre2_compile((PCRE2_SPTR) (regexp->address),
-		(PCRE2_SIZE) (regexp->length), 0,
-		&pcre2_err, &erroroffset, NULL);
-
-	if (!mypat) {
-		fprintf(stderr, "Compile fails!\n");
-		return(-1);
-	}
-
-	match_data = pcre2_match_data_create_from_pattern(mypat, NULL);
-
-	res = pcre2_match(mypat, (PCRE2_SPTR) (subject->address), (PCRE2_SIZE) (subject->length),
-		0, 0, match_data, NULL);
-	fprintf(stderr, "%d\n", res);
-
-	ovcount = pcre2_get_ovector_count(match_data);
-	fprintf(stderr, "ovcount %lu\n", ovcount);
-
-	ovp = pcre2_get_ovector_pointer(match_data); 
-	void *memcpy(void *dest, const void *src, size_t n);
-	memcpy(out->address,subject->address + ovp[0], ovp[1] - ovp[0]);
-	out->length = ovp[1] - ovp[0];
-
-	pcre2_match_data_free(match_data); 
-	pcre2_code_free(mypat);
-
-	return res;
-
-}
-
 /**
  * @brief Wrapper for M calls to pcre2_compile
  *
@@ -376,11 +420,7 @@ gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options
 	pcre2_compile_context *ccontext;
 	pcre2_code *code;		/* our compiled pattern */
 	static char result[32];		/* must be able to hold a hex encoded 64-bit pointer */
-	int must_free_ccontext;
-
-	if(initialize() < 0) {
-		return null_string;
-	}
+	int must_free;
 
 	/*
 	 * If custom compile option strings are passed in, we must
@@ -392,21 +432,7 @@ gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options
 	}
 
 
-	/*
-	 * If we are not supplied a compile context, we must create one.  This
-	 * solely due to the fact that we want to use the M malloc() & free() functions
-	 * to play more nicely with the M environment.
-	 * 
-	 * If we *are* supplied a compile context, we use that instead, and do not
-	 * gratuitously free it.  We test this by seeing if we were passed something
-	 * other than a "0".  (We do not attempt to further validate a non "0")
-	 */
-	if (strcmp(ccontext_str, "0") == 0) {
-		ccontext = pcre2_compile_context_create(global_gcontext);
-		must_free_ccontext = 1;
-	} else {
-		ccontext = (pcre2_compile_context *) pointer_decode(ccontext_str);
-	}
+	ccontext = get_compile_context(ccontext_str, &must_free);
 
 	/*
 	 * Now actually compile the pattern
@@ -414,7 +440,7 @@ gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options
 	code = pcre2_compile( (PCRE2_SPTR) (pattern->address), (PCRE2_SIZE) (pattern->length),
 		compile_options, &ecode, &eoffset, ccontext);
 
-	if (must_free_ccontext) {
+	if (must_free) {
 		pcre2_compile_context_free(ccontext);
 	}
 
@@ -428,7 +454,6 @@ gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options
 
 	pointer_encode(code, result, sizeof(result));
 	return result;
-
 }
 
 /**
@@ -486,7 +511,7 @@ void mpcre2_code_free(int count, gtm_char_t *code) {
  *
  * @param count Count of parameters from the M API
  * @param code A compiled pcre2 regular expression pointer in string format
- * @param code A custom general context or "0" in string format
+ * @param gcontext_str A custom general context or "0" in string format
  *
  * @return A stringified match data pointer
  */
@@ -498,17 +523,9 @@ gtm_char_t *mpcre2_match_data_create_from_pattern(int count, gtm_char_t *code_st
 	pcre2_match_data *md;
 	static char buf[32];
 
-	if(initialize() < 0) {
-		return null_string;
-	}
-
 	code = (pcre2_code *) pointer_decode(code_str);
 
-	if (strcmp(gcontext_str, "0") == 0) {
-		gc = global_gcontext;
-	} else {
-		gc = (pcre2_general_context *) pointer_decode(gcontext_str);
-	}
+	gc = get_general_context(gcontext_str);
 
 	md = pcre2_match_data_create_from_pattern(code, gc);
 
@@ -541,10 +558,8 @@ gtm_long_t mpcre2_match(int count, gtm_char_t *code_str, gtm_string_t *subject,
 	pcre2_match_data *match_data;
 	pcre2_match_context *mc;
 	uint32_t options;
-
-	if (initialize() < 0) {
-		return -1;
-	}
+	int must_free;
+	gtm_long_t res;
 
 	code = (pcre2_code *) pointer_decode(code_str);
 
@@ -554,14 +569,16 @@ gtm_long_t mpcre2_match(int count, gtm_char_t *code_str, gtm_string_t *subject,
 
 	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
 
-	if (strcmp(mcontext_str, "0") == 0) {
-		mc = global_mcontext;
-	} else {
-		mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+	mc = get_match_context(mcontext_str, &must_free);
+
+	res = pcre2_match(code, (PCRE2_SPTR) subject->address, (PCRE2_SIZE) subject->length,
+		(PCRE2_SIZE) startoffset, options, match_data, mc);
+
+	if (must_free) {
+		pcre2_match_context_free(mc);
 	}
 
-	return(pcre2_match(code, (PCRE2_SPTR) subject->address, (PCRE2_SIZE) subject->length,
-		(PCRE2_SIZE) startoffset, options, match_data, mc));
+	return res;
 
 }
 
@@ -594,10 +611,8 @@ gtm_long_t mpcre2_dfa_match(int count, gtm_char_t *code_str, gtm_string_t *subje
 	pcre2_match_context *mc;
 	uint32_t options;
 	int workspace[wscount];
-
-	if (initialize() < 0) {
-		return -1;
-	}
+	int must_free;
+	gtm_long_t res;
 
 	code = (pcre2_code *) pointer_decode(code_str);
 
@@ -607,14 +622,16 @@ gtm_long_t mpcre2_dfa_match(int count, gtm_char_t *code_str, gtm_string_t *subje
 
 	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
 
-	if (strcmp(mcontext_str, "0") == 0) {
-		mc = global_mcontext;
-	} else {
-		mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+	mc = get_match_context(mcontext_str, &must_free);
+
+	res = pcre2_dfa_match(code, (PCRE2_SPTR) subject->address, (PCRE2_SIZE) subject->length,
+		(PCRE2_SIZE) startoffset, options, match_data, mc, workspace, (PCRE2_SIZE) wscount);
+
+	if (must_free) {
+		pcre2_match_context_free(mc);
 	}
 
-	return(pcre2_dfa_match(code, (PCRE2_SPTR) subject->address, (PCRE2_SIZE) subject->length,
-		(PCRE2_SIZE) startoffset, options, match_data, mc, workspace, (PCRE2_SIZE) wscount));
+	return res;
 
 }
 
@@ -660,11 +677,8 @@ gtm_long_t mpcre2_substitute(int count, gtm_char_t *code_str, gtm_string_t *subj
 	pcre2_match_context *mc;
 	uint32_t options;
 	PCRE2_SIZE outputlength;
+	int must_free;
 	int res;
-
-	if (initialize() < 0) {
-		return -1;
-	}
 
 	code = (pcre2_code *) pointer_decode(code_str);
 
@@ -681,11 +695,7 @@ gtm_long_t mpcre2_substitute(int count, gtm_char_t *code_str, gtm_string_t *subj
 		match_data = (pcre2_match_data *) pointer_decode(match_data_str);
 	}
 
-	if (strcmp(mcontext_str, "0") == 0) {
-		mc = global_mcontext;
-	} else {
-		mc = (pcre2_match_context *) pointer_decode(mcontext_str);
-	}
+	mc = get_match_context(mcontext_str, &must_free);
 
 	outputlength = outputbuffer->length;
 	res = pcre2_substitute(code, (PCRE2_SPTR)subject->address, (PCRE2_SIZE) subject->length,
@@ -699,6 +709,10 @@ gtm_long_t mpcre2_substitute(int count, gtm_char_t *code_str, gtm_string_t *subj
 	}
 
 	*outputlengthptr = (gtm_long_t) outputlength;
+
+	if (must_free) {
+		pcre2_match_context_free(mc);
+	}
 
 	return res ;
 }
