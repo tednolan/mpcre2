@@ -78,6 +78,10 @@ struct opt_tab jit_opts [] = {
 };
 int n_jit_opts = sizeof(jit_opts) / sizeof(struct opt_tab);
 
+/*
+ * First we have a number of general utility functions that are not exported
+ */
+
 
 /**
  * @brief Pcre2 compatibile wrapper for M malloc()
@@ -106,43 +110,53 @@ static void m_pcre2_free(void *ptr, void *memory_data) {
 
 
 /**
- * @param Create a pointer from a base 16 encoded string
+ * @param Decode a string handle into a pointer
  *
  * We pass pointers out to M as strings, and deode strings from M into pointers.
- * This function does the decode.  We use strtoull to make sure to have enough bits.
+ * This function does the decode.
  *
- * @param pstr A pointer value encoded as a base 16 string
+ * @param pstr A pointer value encoded as a string handle
  *
- * @return A void pointer which must be cast or NULL on failure
+ * @return A void pointer which must be cast before use
  */
-static void *pointer_decode(const char *pstr) {
+static void *pointer_decode(char *pstr) {
 
 	void *outptr;
+	unsigned long long p;	/* should work on 32 or 64 bit system */
 
-	if (sscanf(pstr, "%p", &outptr) != 1) {
+	if (sscanf(pstr, "%llu", &p) != 1) {
 		fprintf(stderr, "Cannot convert %s to a pointer\n", pstr);
 		return NULL;
 	}
+
+	outptr = (void *) p;
 
 	return outptr;
 }
 
 /**
- * @param Create a base 16 encoded string from a pointer
+ * @param Encode a pointer as a string handle
  *
- * We pass pointers out to M as strings, and deode strings from M into pointers.
- * This function does the encode.
- *
+ * Encode a pointer as a string handle to pass out to M
+ * 
  * @param ptr The pointer value to encode
  * @param buf String storage
  * @param size Size of storage
  *
- * @return A void pointer which must be cast or NULL on failure
+ * @return None
  */
 static void pointer_encode(void *ptr, char *buf, int size) {
 
-	snprintf(buf, size, "%p", ptr);
+	/*
+	 * Unsigned long long should work on both 32 & 64 bit systems
+	 */
+	snprintf(buf, size, "%llu", (unsigned long long) ptr);
 }
+
+/*
+ * Then we have several functions which do use the PCRE2 API but are not
+ * wrappers for PCRE2 functions and are not exported.
+ */
 	
 /**
  * @brief Get or create a general context
@@ -222,8 +236,6 @@ static pcre2_general_context *get_general_context (char *general_context_str) {
 
 	return default_gc;
 }
-
-
 
 /**
  * @brief Get or create a compile context
@@ -390,6 +402,43 @@ static int parse_pcre2_options(struct opt_tab *option_table, int option_count, c
 	return 0;
 }
 
+/*
+ * This section contains exported helper functions which do not directly map to
+ * the PCRE2 API, but paper over the differences between M & C
+ */
+
+/*
+ * @brief Return an output vector pair
+ *
+ * Since M cannot directly manipulate output vector pointers, this access function
+ * is needed to take the pionter handle and an index and return the queried ouput
+ * vector pair
+ *
+ * @param count Parameter count provided by the M API
+ * @param ovector_str A string handle for a pointer to the output vector pairs
+ * @param index Which pair to return
+ * @param p0 Pointer to the first element of the pair to return
+ * @param p1 Pointer to the second element of the pair to return
+ *
+ * @return None
+ */
+void mpcre2_get_ov_pair(int count, gtm_char_t *ovector_str, gtm_long_t index, gtm_long_t *p0, gtm_long_t *p1) {
+
+	PCRE2_SIZE *ov;
+
+	ov = (PCRE2_SIZE *) pointer_decode(ovector_str);
+
+	*p0 = ov[index*2];
+	*p1 = ov[(index*2)+1];
+}
+
+/*
+ * This section contains functions which are exported and are 1 for 1 wrappings
+ * of PCRE2 functions.  They are listed in the order given in the PCRE2
+ * https://www.pcre.org/current/doc/html/pcre2api.html document. (As of a
+ * certain point in time..)
+ */
+
 /**
  * @brief Wrapper for M calls to pcre2_compile
  *
@@ -419,7 +468,7 @@ gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options
 	uint32_t compile_options;
 	pcre2_compile_context *ccontext;
 	pcre2_code *code;		/* our compiled pattern */
-	static char result[32];		/* must be able to hold a hex encoded 64-bit pointer */
+	static char result[80];
 	int must_free;
 
 	/*
@@ -456,32 +505,6 @@ gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options
 	return result;
 }
 
-/**
- * @brief Translate a pcre2_compile() error code into a text message
- *
- * This function provides an M interface to translate a pcre2_compile() error code to a
- * string.  The interface differs a bit from the C function wrapped as the M string
- * supplies its own (max) length.
- *
- * @param count M API supplied argument count
- * @param errorcode Code to be mapped to a string
- *
- */
-gtm_long_t mpcre2_get_error_message(int count, gtm_long_t errorcode, gtm_string_t *buffer) {
-
-	gtm_long_t res;
-
-	res = pcre2_get_error_message( (int) errorcode, (PCRE2_UCHAR *) buffer->address,
-		buffer->length);
-
-	if (res < 0) {
-		buffer->length = 0;
-	} else {
-		buffer->length = res;
-	}
-
-	return res;
-}
 
 /**
  * @brief Wrap pcre2_code_free()
@@ -504,6 +527,33 @@ void mpcre2_code_free(int count, gtm_char_t *code) {
 }
 
 /**
+ * @brief Wrap the pcre2_match_data_create() function
+ *
+ * If we are called with a non "0" general context, use it.
+ * Otherwise we use our internal general context.
+ *
+ * @param count Count of parameters from the M API
+ * @param ovecsize The size of the output vector to create
+ * @param gcontext_str A custom general context or "0" in string format
+ *
+ * @return A stringified match data pointer handle
+ */
+gtm_char_t *mpcre2_match_data_create(int count, gtm_long_t ovecsize, gtm_char_t *gcontext_str) {
+
+	pcre2_general_context *gc;
+	pcre2_match_data *md;
+	static char buf[80];
+
+	gc = get_general_context(gcontext_str);
+
+	md = pcre2_match_data_create(ovecsize, gc);
+
+	pointer_encode(md, buf, sizeof(buf));
+
+	return buf;
+}
+
+/**
  * @brief Wrap pcre2_match_data_create_from_pattern()
  *
  * If we are called with a non "0" general context, use it.
@@ -521,7 +571,7 @@ gtm_char_t *mpcre2_match_data_create_from_pattern(int count, gtm_char_t *code_st
 	pcre2_code *code;
 	pcre2_general_context *gc;
 	pcre2_match_data *md;
-	static char buf[32];
+	static char buf[80];
 
 	code = (pcre2_code *) pointer_decode(code_str);
 
@@ -529,7 +579,7 @@ gtm_char_t *mpcre2_match_data_create_from_pattern(int count, gtm_char_t *code_st
 
 	md = pcre2_match_data_create_from_pattern(code, gc);
 
-	pointer_encode((void *) md, buf, sizeof(buf));
+	pointer_encode(md, buf, sizeof(buf));
 
 	return buf;
 }
@@ -581,7 +631,6 @@ gtm_long_t mpcre2_match(int count, gtm_char_t *code_str, gtm_string_t *subject,
 	return res;
 
 }
-
 
 /**
  * @brief wrap pcre2_dfa_match() for M
@@ -651,6 +700,145 @@ void mpcre2_match_data_free(int count, gtm_char_t *match_data_str) {
 
 	pcre2_match_data_free(match_data);
 }
+
+/**
+ * @brief wrap pcre2_get_mark()
+ *
+ * Note this text from the PCRE2 documentation:
+ *
+ *	After a successful match, a partial match
+ *	(PCRE2_ERROR_PARTIAL), or a failure to match
+ *	(PCRE2_ERROR_NOMATCH), a mark name may be
+ *	available. The function pcre2_get_mark()
+ *	can be called to access this name, which
+ *	can be specified in the pattern by any of
+ *	the backtracking control verbs, not just
+ *	(*MARK). The same function applies to all
+ *	the verbs. It returns a pointer to the
+ *	zero-terminated name, which is within the
+ *	compiled pattern. If no name is available,
+ *	NULL is returned. The length of the name
+ *	(excluding the terminating zero) is stored
+ *	in the code unit that precedes the name. You
+ *	should use this length instead of relying
+ *	on the terminating zero if the name might
+ *	contain a binary zero.
+ *
+ *  So we are given liberty to index *BACKWARD* from the
+ *  given string, as unusual as that might seem.  In fact
+ *  we do do this, so we can construct an M string which will
+ *  still be OK if it contains zero bytes.  Since we only handle
+ *  8 bit code units, the length of the mark name ipso facto
+ *  must be <= 255.
+ *
+ * @param count Paramater count from the M API
+ * @param match_data_str A match data handle
+ *
+ * @return A mark name, or zero length string if none is available
+ *
+ */
+gtm_string_t *mpcre2_get_mark(int count, gtm_char_t *match_data_str) {
+
+	pcre2_match_data *match_data;
+	unsigned char mark_len;
+	char *mark_name;
+	static gtm_string_t ret;
+
+	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	mark_name = (char *) pcre2_get_mark(match_data);
+
+	ret.address = NULL;
+	ret.length = 0;
+
+	if (mark_name) {
+		ret.address = mark_name;
+		mark_len = (unsigned char) mark_name[-1];	/* see note in function header */
+		ret.length = (int) mark_len;
+	} 
+
+	return &ret;
+
+}
+
+/**
+ * @brief wrap the pcre2_get_ovector_count() function
+ *
+ *
+ * @param count Parameter count from the M API
+ * @param match_data_str String handle for a pcre2 *match_data pointer
+ *
+ * @return The number of pairs in the output vector for this match
+ */
+ gtm_long_t mpcre2_get_ovector_count(int count, gtm_char_t *match_data_str) {
+
+ 	pcre2_match_data *match_data;
+
+	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	return pcre2_get_ovector_count(match_data);
+ }
+
+/**
+ * @brief wrap the pcre2_get_ovector_pointer() function
+ *
+ * This function is provided, but does not have much direct utility in M, as there
+ * is no native way to *use* the returned pointer handle.  Instead, the
+ * result must be used with the utility function mpcre2_get_ov_pair()
+ * (pcre2getovpair in M)
+ *
+ * @param count The parameter count from the M API
+ * @param match_data_str String handle for a match data pointer
+ *
+ * @return A string handle for the output vector pointer
+ */
+ gtm_char_t *mpcre2_get_ovector_pointer(int count, gtm_char_t *match_data_str) {
+
+ 	pcre2_match_data *match_data;
+	PCRE2_SIZE *p;
+	static char buf[80];
+
+	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	p = pcre2_get_ovector_pointer(match_data);
+
+	pointer_encode(p, buf, sizeof(buf));
+
+	return buf;
+ }
+
+/**
+ * @brief Translate a pcre2_compile() error code into a text message
+ *
+ * This function provides an M interface to translate a pcre2_compile() error code to a
+ * string.  The interface differs a bit from the C function wrapped as the M string
+ * supplies its own (max) length.
+ *
+ * @param count M API supplied argument count
+ * @param errorcode Code to be mapped to a string
+ *
+ */
+gtm_long_t mpcre2_get_error_message(int count, gtm_long_t errorcode, gtm_string_t *buffer) {
+
+	gtm_long_t res;
+
+	res = pcre2_get_error_message( (int) errorcode, (PCRE2_UCHAR *) buffer->address,
+		buffer->length);
+
+	if (res < 0) {
+		buffer->length = 0;
+	} else {
+		buffer->length = res;
+	}
+
+	return res;
+}
+
+
+
+
+
+
 
 /**
 * @brief Wrap the pcre2_substitute() function
@@ -742,64 +930,6 @@ gtm_long_t mpcre2_jit_compile(int count, gtm_char_t *code_str, gtm_char_t *optio
 	return pcre2_jit_compile(code, options);
 }
 
-/**
- * @brief wrap PCRE2_SPTR pcre2_get_mark()
- *
- * Note this text from the PCRE2 documentation:
- *
- *	After a successful match, a partial match
- *	(PCRE2_ERROR_PARTIAL), or a failure to match
- *	(PCRE2_ERROR_NOMATCH), a mark name may be
- *	available. The function pcre2_get_mark()
- *	can be called to access this name, which
- *	can be specified in the pattern by any of
- *	the backtracking control verbs, not just
- *	(*MARK). The same function applies to all
- *	the verbs. It returns a pointer to the
- *	zero-terminated name, which is within the
- *	compiled pattern. If no name is available,
- *	NULL is returned. The length of the name
- *	(excluding the terminating zero) is stored
- *	in the code unit that precedes the name. You
- *	should use this length instead of relying
- *	on the terminating zero if the name might
- *	contain a binary zero.
- *
- *  So we are given liberty to index *BACKWARD* from the
- *  given string, as unusual as that might seem.  In fact
- *  we do do this, so we can construct an M string which will
- *  still be OK if it contains zero bytes.  Since we only handle
- *  8 bit code units, the length must be <= 255.
- *
- * @param count Paramater count from the M API
- * @param match_data_str A match data handle
- *
- * @return A mark name, or zero length string if none is available
- *
- */
-gtm_string_t *mpcre2_get_mark(int count, gtm_char_t *match_data_str) {
-
-	pcre2_match_data *match_data;
-	unsigned char mark_len;
-	char *mark_name;
-	static gtm_string_t ret;
-
-	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
-
-	mark_name = (char *) pcre2_get_mark(match_data);
-
-	ret.address = NULL;
-	ret.length = 0;
-
-	if (mark_name) {
-		ret.address = mark_name;
-		mark_len = (unsigned char) mark_name[-1];	/* see note in function header */
-		ret.length = (int) mark_len;
-	} 
-
-	return &ret;
-
-}
 
 /**
  * @brief wrap pcre2_get_startchar()
