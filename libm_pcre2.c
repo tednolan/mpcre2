@@ -411,7 +411,7 @@ static int parse_pcre2_options(struct opt_tab *option_table, int option_count, c
  * @brief Return an output vector pair
  *
  * Since M cannot directly manipulate output vector pointers, this access function
- * is needed to take the pionter handle and an index and return the queried ouput
+ * is needed to take the handle and an index and return the queried ouput
  * vector pair
  *
  * @param count Parameter count provided by the M API
@@ -536,7 +536,7 @@ void mpcre2_code_free(int count, gtm_char_t *code) {
  * @param ovecsize The size of the output vector to create
  * @param gcontext_str A custom general context or "0" in string format
  *
- * @return A stringified match data pointer handle
+ * @return A stringified match data handle
  */
 gtm_char_t *mpcre2_match_data_create(int count, gtm_long_t ovecsize, gtm_char_t *gcontext_str) {
 
@@ -783,7 +783,7 @@ gtm_string_t *mpcre2_get_mark(int count, gtm_char_t *match_data_str) {
  * @brief wrap the pcre2_get_ovector_pointer() function
  *
  * This function is provided, but does not have much direct utility in M, as there
- * is no native way to *use* the returned pointer handle.  Instead, the
+ * is no native way to *use* the returned handle.  Instead, the
  * result must be used with the utility function mpcre2_get_ov_pair()
  * (pcre2getovpair in M)
  *
@@ -806,6 +806,120 @@ gtm_string_t *mpcre2_get_mark(int count, gtm_char_t *match_data_str) {
 
 	return buf;
  }
+
+
+/**
+ * @brief wrap pcre2_get_startchar()
+ *
+ * @param count Parameter count from M API
+ * @param match_data_str Match data handle
+ *
+ * @return Code unit offset of successful match
+ */
+gtm_long_t mpcre2_get_startchar(int count, char *match_data_str) {
+
+	pcre2_match_data *match_data;
+
+	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	return pcre2_get_startchar(match_data);
+}
+
+/**
+ * @brief Wrap the pcre2_general_context_create() function
+ *
+ * In general M code should never need to call this function, as m_pcre2
+ * creates a hidden general context when needed.  Also, there is no way
+ * from M to specify custom C level arguments (unless the M runtime has another
+ * plugin which returns appropriate handles).
+ *
+ * However, if "0" is passed for all three parameters, NULL will be used, and 
+ * a general context using the system (not M) memory functions will be returned.
+ *
+ * @param count Count of parameters provided by the M API
+ * @param malloc_ptr_str String handle for a pointer to a pcre2 malloc() compatible function
+ * @param free_ptr_str String handle for a pointer to a pcre2 free() compatible function
+ * @param data_ptr_str String handle for a pointer to a data item to be used for marking memory
+ *
+ * @return A string handle to the created pcre2_general_context (or "0" on failure)
+ *
+ */
+gtm_char_t *mpcre2_general_context_create(int count, gtm_char_t *malloc_ptr_str, gtm_char_t *free_ptr_str, gtm_char_t *data_ptr_str) {
+	
+	pcre2_general_context *gc;
+	static char buf[80];
+
+	gc = pcre2_general_context_create(pointer_decode(malloc_ptr_str), pointer_decode(free_ptr_str), pointer_decode(data_ptr_str));
+
+	pointer_encode(gc, buf, sizeof(buf));
+
+	return buf;
+}
+
+/**
+ * @brief Wrap the pcre2_general_context_copy() function
+ *
+ * @param count Parameter count provided by the M API
+ * @param general_context_str String handle to a pcre2 general context
+ *
+ * @return A string handle to a copy of the provided general context or "0"
+ *
+ */ 
+ gtm_char_t *mpcre2_general_context_copy(int count, gtm_char_t *general_context_str) {
+ 	
+	pcre2_general_context *gc;
+	pcre2_general_context *gc2;
+	static char buf[80];
+
+	gc = (pcre2_general_context *) pointer_decode(general_context_str);
+
+	gc2 = pcre2_general_context_copy(gc);
+
+	pointer_encode(gc2, buf, sizeof(buf));
+
+	return buf;
+ }
+
+/**
+ * @brief Wrap the pcre2_compile_context_create() function
+ *
+ * @param count Parameter count provided by the M API
+ * @param gc_str String handle to a pcre2 general context
+ *
+ * @return String handle to a pcre2 compile context
+ */
+gtm_char_t *mpcre2_compile_context_create(int count, gtm_char_t *gc_str) {
+
+	pcre2_general_context *gc;
+	pcre2_compile_context *cc;
+	static char buf[80];
+
+	gc = (pcre2_general_context *) pointer_decode(gc_str);
+
+	cc = pcre2_compile_context_create(gc);
+
+	pointer_encode(cc, buf, sizeof(buf));
+
+	return buf;
+}
+
+/**
+ * @brief Wrap pcre2_general_context_free()
+ *
+ * @param count Parameter count from the M API
+ * @param gc_str String handle to a pcre2 general context
+ *
+ * @return None
+ */
+void mpcre2_general_context_free(int count, gtm_char_t *gc_str) {
+	
+	pcre2_general_context *gc;
+
+	gc = (pcre2_general_context *) pointer_decode(gc_str);
+
+	pcre2_general_context_free(gc);
+}
+
 
 /**
  * @brief Translate a pcre2_compile() error code into a text message
@@ -841,21 +955,21 @@ gtm_long_t mpcre2_get_error_message(int count, gtm_long_t errorcode, gtm_string_
 
 
 /**
-* @brief Wrap the pcre2_substitute() function
-*
-* @param count M API argument count
-* @param code Handle for a compiled PCRE2 regular expression
-* @param subject The string in which to make the substitution
-* @param startoffset The byte offset in the subject to start checking for substitutions
-* @param options Match options as in pcre2_match()
-* @param match_data Match data handle as in pcre2_match()
-* @param mcontext Pcre2 match context handle
-* @param replacemnt The sting to substitute for matched text
-* @param outputbuffer Where to put the copy of the subject with the replacement(s)
-*
-* @return The number of substitutions or < 0 on error
-*
-*/
+ * @brief Wrap the pcre2_substitute() function
+ *
+ * @param count M API argument count
+ * @param code Handle for a compiled PCRE2 regular expression
+ * @param subject The string in which to make the substitution
+ * @param startoffset The byte offset in the subject to start checking for substitutions
+ * @param options Match options as in pcre2_match()
+ * @param match_data Match data handle as in pcre2_match()
+ * @param mcontext Pcre2 match context handle
+ * @param replacemnt The sting to substitute for matched text
+ * @param outputbuffer Where to put the copy of the subject with the replacement(s)
+ *
+ * @return The number of substitutions or < 0 on error
+ *
+ */
 gtm_long_t mpcre2_substitute(int count, gtm_char_t *code_str, gtm_string_t *subject,
 	gtm_long_t startoffset, gtm_char_t *options_str, gtm_char_t *match_data_str,
 	gtm_char_t *mcontext_str, gtm_string_t *replacement, gtm_string_t *outputbuffer, gtm_long_t *outputlengthptr) {
@@ -931,19 +1045,3 @@ gtm_long_t mpcre2_jit_compile(int count, gtm_char_t *code_str, gtm_char_t *optio
 }
 
 
-/**
- * @brief wrap pcre2_get_startchar()
- *
- * @param count Parameter count from M API
- * @param match_data_str Match data handle
- *
- * @return Code unit offset of successful match
- */
-gtm_long_t mpcre2_get_startchar(int count, char *match_data_str) {
-
-	pcre2_match_data *match_data;
-
-	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
-
-	return pcre2_get_startchar(match_data);
-}
