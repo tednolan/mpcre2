@@ -19,3 +19,17 @@ pcre2generalcontextcreate: gtm_char_t *mpcre2_general_context_create(I:gtm_char_
 pcre2generalcontextcopy: gtm_char_t *mpcre2_general_context_copy(I:gtm_char_t *): SIGSAFE
 pcre2generalcontextfree: void mpcre2_general_context_free(I:gtm_char_t *): SIGSAFE
 pcre2compilecontextcreate: gtm_char_t *mpcre2_compile_context_create(I:gtm_char_t *): SIGSAFE
+pcre2compilecontextcopy: gtm_char_t *mpcre2_compile_context_copy(I:gtm_char_t *): SIGSAFE
+pcre2compilecontextfree: void mpcre2_compile_context_free(I:gtm_char_t *): SIGSAFE
+pcre2setbsr: gtm_long_t mpcre2_set_bsr(I:gtm_char_t *, I:gtm_char_t *): SIGSAFE
+pcre2setcharactertables: gtm_long_t mpcre2_set_character_tables(I:gtm_char_t *, I:gtm_char_t *): SIGSAFE
+pcre2setcompileextraoptions: gtm_long_t mpcre2_set_compile_extra_options(I:gtm_char_t *, I:gtm_char_t *): SIGSAFE
+pcre2setmaxpatternlength: gtm_long_t mpcre2_set_max_pattern_length(I:gtm_char_t *, I:gtm_long_t): SIGSAFE
+pcre2setnewline: gtm_long_t mpcre2_set_newline(I:gtm_char_t *, I:gtm_char_t *): SIGSAFE
+pcre2setparensnestlimit: gtm_long_t mpcre2_set_parens_nest_limit(I:gtm_char_t *, I:gtm_long_t): SIGSAFE
+pcre2setcompilerecursionguard: gtm_long_t mpcre2_set_compile_recursion_guard(I:gtm_char_t *, I:gtm_char_t *, I:gtm_char_t *): SIGSAFE
+pcre2matchcontextcreate: gtm_char_t *mpcre2_match_context_create(I:gtm_char_t *): SIGSAFE
+pcre2matchcontextcopy: gtm_char_t *mpcre2_match_context_copy(I:gtm_char_t *): SIGSAFE
+pcre2matchcontextfree: void mpcre2_match_context_free(I:gtm_char_t*): SIGSAFE
+pcre2setcallout: gtm_long_t mpcre2_set_callout(I:gtm_char_t *, I:gtm_char_t *, I:gtm_char_t *): SIGSAFE
+

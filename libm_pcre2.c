@@ -48,6 +48,14 @@ struct opt_tab compile_opts [] = {
 };
 int n_compile_opts = sizeof(compile_opts) / sizeof(struct opt_tab);
 
+struct opt_tab extra_compile_opts [] = {
+	{ "PCRE2_EXTRA_ALLOW_SURROGATE_ESCAPES", PCRE2_EXTRA_ALLOW_SURROGATE_ESCAPES },
+	{ "PCRE2_EXTRA_BAD_ESCAPE_IS_LITERAL", PCRE2_EXTRA_BAD_ESCAPE_IS_LITERAL },
+	{ "PCRE2_EXTRA_MATCH_LINE", PCRE2_EXTRA_MATCH_LINE },
+	{ "PCRE2_EXTRA_MATCH_WORD", PCRE2_EXTRA_MATCH_WORD },
+};
+int n_extra_compile_opts = sizeof(extra_compile_opts) / sizeof(struct opt_tab);
+
 /*
  * This table has both match and substitute options, because pcre2_substitute()
  * takes many of the match options
@@ -77,6 +85,22 @@ struct opt_tab jit_opts [] = {
 	{ "PCRE2_JIT_PARTIAL_HARD", PCRE2_JIT_PARTIAL_HARD },
 };
 int n_jit_opts = sizeof(jit_opts) / sizeof(struct opt_tab);
+
+struct opt_tab bsr_opts [] = {
+	{ "PCRE2_BSR_ANYCRLF", PCRE2_BSR_ANYCRLF },
+	{ "PCRE2_BSR_UNICODE", PCRE2_BSR_UNICODE },
+};
+int n_bsr_opts = sizeof(bsr_opts) / sizeof(struct opt_tab);
+
+struct opt_tab newline_opts [] = {
+	{ "PCRE2_NEWLINE_CR", PCRE2_NEWLINE_CR },
+	{ "PCRE2_NEWLINE_LF", PCRE2_NEWLINE_LF },
+	{ "PCRE2_NEWLINE_CRLF", PCRE2_NEWLINE_CRLF },
+	{ "PCRE2_NEWLINE_ANYCRLF", PCRE2_NEWLINE_ANYCRLF },
+	{ "PCRE2_NEWLINE_ANY", PCRE2_NEWLINE_ANY },
+	{ "PCRE2_NEWLINE_NUL", PCRE2_NEWLINE_NUL },
+};
+int n_newline_opts = sizeof(newline_opts) / sizeof(struct opt_tab);
 
 /*
  * First we have a number of general utility functions that are not exported
@@ -881,6 +905,23 @@ gtm_char_t *mpcre2_general_context_create(int count, gtm_char_t *malloc_ptr_str,
  }
 
 /**
+ * @brief Wrap pcre2_general_context_free()
+ *
+ * @param count Parameter count from the M API
+ * @param gc_str String handle to a pcre2 general context
+ *
+ * @return None
+ */
+void mpcre2_general_context_free(int count, gtm_char_t *gc_str) {
+	
+	pcre2_general_context *gc;
+
+	gc = (pcre2_general_context *) pointer_decode(gc_str);
+
+	pcre2_general_context_free(gc);
+}
+
+/**
  * @brief Wrap the pcre2_compile_context_create() function
  *
  * @param count Parameter count provided by the M API
@@ -904,22 +945,327 @@ gtm_char_t *mpcre2_compile_context_create(int count, gtm_char_t *gc_str) {
 }
 
 /**
- * @brief Wrap pcre2_general_context_free()
+ * @brief Wrap the pcre2_compile_context_copy() function
  *
  * @param count Parameter count from the M API
- * @param gc_str String handle to a pcre2 general context
+ * @param ccontext_str String handle for a pcre2 compile context
+ *
+ * @return String handle for a copy of the given context
+ *
+ */
+gtm_char_t *mpcre2_compile_context_copy(int count, gtm_char_t *ccontext_str) {
+
+	pcre2_compile_context *cc;
+	pcre2_compile_context *cc2;
+	static char buf[80];
+
+	cc = (pcre2_compile_context *) pointer_decode(ccontext_str);
+
+	cc2 = pcre2_compile_context_copy(cc);
+
+	pointer_encode(cc2, buf, sizeof(buf));
+
+	return buf;
+}
+
+/**
+ * @brief Wrap the pcre2_compile_context_free() function
+ *
+ * @param count Parameter count from the M API
+ * @param ccontext_str String handle for a pcre2 compile context
  *
  * @return None
  */
-void mpcre2_general_context_free(int count, gtm_char_t *gc_str) {
-	
-	pcre2_general_context *gc;
+ void mpcre2_compile_context_free(int count, gtm_char_t *ccontext_str) {
+	pcre2_compile_context *cc;
 
-	gc = (pcre2_general_context *) pointer_decode(gc_str);
+	cc = (pcre2_compile_context *) pointer_decode(ccontext_str);
 
-	pcre2_general_context_free(gc);
+	pcre2_compile_context_free(cc);
+ }
+
+/**
+ * @brief Wrap the pcre2_set_bsr() function
+ *
+ * @param count Parameter count from the M API
+ * @param ccontext_str String handle for a pcre2 compile context
+ * @param value_str String form of pcre2 code for handling \R
+ *
+ * @return 0 on success, non zero on failure
+ */
+gtm_long_t mpcre2_set_bsr(int count, gtm_char_t *ccontext_str, gtm_char_t *value_str) {
+
+	uint32_t value;
+	pcre2_compile_context *cc;
+
+	cc = (pcre2_compile_context *) pointer_decode(ccontext_str);
+
+	/*
+	 * Parse the bsr option string
+	 */
+	if (parse_pcre2_options(bsr_opts, n_bsr_opts, "bsr", value_str, &value) < 0) {
+		return PCRE2_ERROR_BADDATA;
+	}
+
+	return pcre2_set_bsr(cc, value);
 }
 
+/**
+ * @brief Wrap the  pcre2_set_character_tables() function
+ *
+ * @param count Parameter count from the M API
+ * @param ccontext_str String handle for a pcre2 compile context
+ * @param tables_str String handle for a result from pcre2_maketables, or "NULL"
+ *
+ * @return Always returns 0
+ */
+gtm_long_t mpcre2_set_character_tables(gtm_char_t *ccontext_str, gtm_char_t *tables_str) {
+
+	pcre2_compile_context *cc;
+	const unsigned char *tables;
+
+	cc = (pcre2_compile_context *) pointer_decode(ccontext_str);
+
+	tables = (const unsigned char*) pointer_decode(tables_str);
+
+	return pcre2_set_character_tables(cc, tables);
+}
+
+/**
+ * @brief Wrap the pcre2_set_compile_extra_options() function
+ *
+ * @param count Parameter count from the M API
+ * @param ccontext_str String handle for a pcre2 compile context
+ * @param extra_options_str String with pcre2 "extra" compile options
+ *
+ * @return 0 in all cases
+ */
+gtm_long_t mpcre2_set_compile_extra_options(int count, gtm_char_t *ccontext_str, gtm_char_t *extra_options_str) {
+
+	pcre2_compile_context *cc;
+	uint32_t extra_options;
+
+	cc = (pcre2_compile_context *) pointer_decode(ccontext_str);
+
+	/* not really much point error checking this */
+	if (parse_pcre2_options(extra_compile_opts, n_extra_compile_opts, "extra compile", extra_options_str, &extra_options) < 0) {
+		return 0;
+	}
+
+	return pcre2_set_compile_extra_options(cc, extra_options);
+}
+
+/**
+ * @brief Wrap the pcre2_set_max_pattern_length() function
+ *
+ * @param count Parameter count from the M API
+ * @param ccontext_str String handle for a pcre2 compile context
+ * @param value The maximum number of code units allowed in a pcre2 pattern
+ *
+ * @return 0 in all cases
+ */
+gtm_long_t mpcre2_set_max_pattern_length(int count, gtm_char_t *ccontext_str, gtm_long_t value) {
+	pcre2_compile_context *cc;
+
+	cc = (pcre2_compile_context *) pointer_decode(ccontext_str);
+
+	return pcre2_set_max_pattern_length(cc, value);
+}
+
+/**
+ * @brief Wrap pcre2_set_newline() function
+ *
+ * @param count Parameter count from the M API
+ * @param ccontext_str String handle for a pcre2 compile context
+ * @param value_str String representing the pcre2 newline convention to set
+ *
+ * @return 0 on success, nonzero on error
+ */
+gtm_long_t mpcre2_set_newline(int count,gtm_char_t *ccontext_str, gtm_char_t *value_str) {
+
+	pcre2_compile_context *cc;
+	uint32_t value;
+
+	cc = (pcre2_compile_context *) pointer_decode(ccontext_str);
+
+	if(parse_pcre2_options(newline_opts, n_newline_opts, "newline opts", value_str, &value) < 0) {
+		return PCRE2_ERROR_BADDATA;
+	}
+
+	return pcre2_set_newline(cc, value);
+}
+
+/**
+ * @brief Wrap the pcre2_set_parens_nest_limit() function
+ *
+ * @param count Parameter count from the M API
+ * @param ccontext_str String handle to a pcre2 compile context
+ * @param value The maximum allowed nesting depth for parens
+ *
+ * @return 0 in all cases
+ */
+gtm_long_t mpcre2_set_parens_nest_limit(int count, gtm_char_t *ccontext_str, gtm_long_t value) {
+
+	pcre2_compile_context *cc;
+
+	cc = (pcre2_compile_context *) pointer_decode(ccontext_str);
+
+	return pcre2_set_parens_nest_limit(cc, value);
+}
+
+/**
+ * @brief Wrap the pcre2_set_compile_recursion_guard() function
+ *
+ * This function is unlikely to be useful in the context of libm_pcre2, as
+ * it sets up a callback for use during expression compilation of parenthesized
+ * patterns, and libm_pcre2 does not provide any way to create such a function
+ * or return a handle to it.  That functionality could be provided by another
+ * plugin, but is left as an exercise for the reader.
+ *
+ * @param count Parameter count from the M API
+ * @param ccontext_str String handle for a pcre2 compile context
+ * @param guard_function_str String handle for a pointer to a guard function
+ * @param user_data String handle for a piece of user data
+ *
+ * @return 0 in all cases
+ *
+ */
+ gtm_long_t mpcre2_set_compile_recursion_guard(int count, gtm_char_t *ccontext_str, gtm_char_t *guard_function_str, gtm_char_t *user_data_str) {
+
+	pcre2_compile_context *cc;
+	void *guard_function;
+	void *user_data;
+
+	cc = (pcre2_compile_context *) pointer_decode(ccontext_str);
+
+	guard_function = (void *) pointer_decode(guard_function_str);
+
+	user_data = (void *) pointer_decode(user_data_str);
+
+	return pcre2_set_compile_recursion_guard(cc, guard_function, user_data);
+ }
+
+/**
+ * @brief Wrap the pcre2_match_context_create() function
+ *
+ * @param count Parameter count from the M API
+ * @param gcontext_str String handle to a pcre2 general context
+ *
+ * @return String handle to a pcre2 match context
+ */
+gtm_char_t *mpcre2_match_context_create(int count, gtm_char_t *gcontext_str) {
+
+	pcre2_general_context *gc;
+	pcre2_match_context *mc;
+	static char buf[80];
+
+	gc = (pcre2_general_context *) pointer_decode(gcontext_str);
+
+	mc = pcre2_match_context_create(gc);
+
+	pointer_encode(mc, buf, sizeof(buf));
+
+	return buf;
+}
+
+/**
+ * @brief Wrap the pcre2_match_context_copy() function
+ *
+ * @param count Parameter count from the M API
+ * @param mcontext_str String handle to a pcre2 match context
+ *
+ * @return String handle for a new pcre2 match context
+ */
+gtm_char_t *mpcre2_match_context_copy(int count, gtm_char_t *mcontext_str) {
+
+	pcre2_match_context *mc;
+	pcre2_match_context *mc2;
+	static char buf[80];
+
+	mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+
+	mc2 = pcre2_match_context_copy(mc);
+
+	pointer_encode(mc2, buf, sizeof(buf));
+
+	return buf;
+}
+
+/**
+ * @brief Wrap the pcre2_match_context_free() function
+ *
+ * @param count Parameter count from the M API
+ * @param mcontext_str String handle for a pcre2 match context
+ *
+ * @return None
+ */ 
+ void mpcre2_match_context_free(int count, gtm_char_t* mcontext_str) {
+
+	pcre2_match_context *mc;
+
+	mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+
+ 	pcre2_match_context_free(mc);
+ }
+
+/**
+* @brief Wrap the pcre2_set_callout() function
+*
+* This function is unlikely to be of use in the libm_pcre2 context as it
+* sets up a callout function in a pcre2 match context, and libm_pcre2 does not
+* provide any way to create such callouts, or return handles for them.  This could
+* be done in another plugin and is left as an exercise for the reader.
+* 
+* @param count Parameter count provided from the M API
+* @param mcontext_str String handle for a pcre2 match context
+* @param callout_function_str String handle for callout function
+* @param callout_data_str String handle for callout data
+*
+* @return 0 in all cases
+*/
+gtm_long_t mpcre2_set_callout(int count, gtm_char_t *mcontext_str, gtm_char_t *callout_function_str, gtm_char_t *callout_data_str) {
+
+	pcre2_match_context *mc;
+	void *callout_function;
+	void *callout_data;
+
+	mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+
+	callout_function = (void *) pointer_decode(callout_function_str);
+
+	callout_data = (void *) pointer_decode(callout_data_str);
+
+	return pcre2_set_callout(mc, callout_function, callout_data);
+}
+
+/**
+ * @brief Wrap the pcre2_set_substitute_callout() function
+ *
+ * This function is unlikely to be useful in the libm_pcre2 context, as it sets up a callout function
+ * for PCRE2 to call after each substitution made by pcre2_substitute(), and libm_pcre2 provides no way
+ * to create such functions or return handles to them though this could be done in another plugin.
+ *
+ * @param count Parameter count from the M API
+ * @param mcontext_str String handle for a pcre2 match context
+ * @param callout_function_str String handle for the callout function
+ * @param callout_data_str String handle for the callout data
+ * 
+ * @return 0 in all cases
+ */
+gtm_long_t mpcre2_set_substitute_callout(int count, gtm_char_t *mcontext_str, gtm_char_t *callout_function_str, gtm_char_t *callout_data_str) {
+
+	pcre2_match_context *mc;
+	void *callout_function;
+	void *callout_data;
+
+	mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+
+	callout_function = (void *) pointer_decode(callout_function_str);
+
+	callout_data = (void *) pointer_decode(callout_data_str);
+
+	return pcre2_set_substitute_callout(mc, callout_function, callout_data);
+}
 
 /**
  * @brief Translate a pcre2_compile() error code into a text message
