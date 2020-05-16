@@ -1238,6 +1238,8 @@ gtm_long_t mpcre2_set_callout(int count, gtm_char_t *mcontext_str, gtm_char_t *c
 	return pcre2_set_callout(mc, callout_function, callout_data);
 }
 
+#if 0
+ /* Not supported in Ubuntu version yet */
 /**
  * @brief Wrap the pcre2_set_substitute_callout() function
  *
@@ -1266,6 +1268,83 @@ gtm_long_t mpcre2_set_substitute_callout(int count, gtm_char_t *mcontext_str, gt
 
 	return pcre2_set_substitute_callout(mc, callout_function, callout_data);
 }
+#endif
+
+/**
+ * @brief Wrap the pcre2_set_offset_limit() function
+ *
+ * @param count Parameter count from the M API
+ * @param mcontext_str String handle for a pcre2 match context
+ * @param value Value for the offest limit field in the match context
+ *
+ * @return 0 in all cases
+ */
+gtm_long_t mpcre2_set_offset_limit(int count,gtm_char_t *mcontext_str, gtm_long_t value) {
+
+	pcre2_match_context *mc;
+
+	mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+
+	return pcre2_set_offset_limit(mc, value);
+}
+
+
+/**
+ * @brief Wrap the pcre2_set_heap_limit() function
+ *
+ * @param count Parameter count from the M API
+ * @param mcontext_str String handle for a pcre2 match context
+ * @param value Value for the backtracking heap limit field in the match context
+ *
+ * @return 0 in all cases
+ */
+gtm_long_t mpcre2_set_heap_limit(int count,gtm_char_t *mcontext_str, gtm_long_t value) {
+
+	pcre2_match_context *mc;
+
+	mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+
+	return pcre2_set_heap_limit(mc, value);
+}
+
+
+/**
+ * @brief Wrap the pcre2_set_match_limit() function
+ *
+ * @param count Parameter count from the M API
+ * @param mcontext_str String handle for a pcre2 match context
+ * @param value Value for the match limit field in the match context
+ *
+ * @return 0 in all cases
+ */
+gtm_long_t mpcre2_set_match_limit(int count,gtm_char_t *mcontext_str, gtm_long_t value) {
+
+	pcre2_match_context *mc;
+
+	mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+
+	return pcre2_set_match_limit(mc, value);
+}
+
+
+/**
+ * @brief Wrap the pcre2_set_depth_limit() function
+ *
+ * @param count Parameter count from the M API
+ * @param mcontext_str String handle for a pcre2 depth context
+ * @param value Value for the backtracking depth limit field in the match context
+ *
+ * @return 0 in all cases
+ */
+gtm_long_t mpcre2_set_depth_limit(int count,gtm_char_t *mcontext_str, gtm_long_t value) {
+
+	pcre2_match_context *mc;
+
+	mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+
+	return pcre2_set_depth_limit(mc, value);
+}
+
 
 /**
  * @brief Translate a pcre2_compile() error code into a text message

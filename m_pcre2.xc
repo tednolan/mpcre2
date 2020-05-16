@@ -32,4 +32,7 @@ pcre2matchcontextcreate: gtm_char_t *mpcre2_match_context_create(I:gtm_char_t *)
 pcre2matchcontextcopy: gtm_char_t *mpcre2_match_context_copy(I:gtm_char_t *): SIGSAFE
 pcre2matchcontextfree: void mpcre2_match_context_free(I:gtm_char_t*): SIGSAFE
 pcre2setcallout: gtm_long_t mpcre2_set_callout(I:gtm_char_t *, I:gtm_char_t *, I:gtm_char_t *): SIGSAFE
-
+pcre2setoffsetlimit: gtm_long_t mpcre2_set_offset_limit(I:gtm_char_t*, I:gtm_long_t): SIGSAFE
+pcre2setheaplimit: gtm_long_t mpcre2_set_heap_limit(I:gtm_char_t*, I:gtm_long_t): SIGSAFE
+pcre2setmatchlimit: gtm_long_t mpcre2_set_match_limit(I:gtm_char_t*, I:gtm_long_t): SIGSAFE
+pcre2setdepthlimit: gtm_long_t mpcre2_set_depth_limit(I:gtm_char_t*, I:gtm_long_t): SIGSAFE
