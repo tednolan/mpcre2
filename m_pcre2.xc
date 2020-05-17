@@ -1,5 +1,4 @@
 ./libm_pcre2.so
-regexp: gtm_long_t regexp( I:gtm_string_t*, I:gtm_string_t*, O:gtm_string_t* [1024]) :SIGSAFE
 pcre2compile:	gtm_char_t* mpcre2_compile(I:gtm_string_t*, I:gtm_char_t*, O:gtm_long_t*, O:gtm_ulong_t*, I:gtm_char_t*): SIGSAFE
 pcre2geterrormessage: gtm_long_t mpcre2_get_error_message(I:gtm_long_t, O:gtm_string_t* [200]):SIGSAFE
 pcre2codefree: void mpcre2_code_free(I:gtm_char_t*): SIGSAFE
@@ -36,3 +35,11 @@ pcre2setoffsetlimit: gtm_long_t mpcre2_set_offset_limit(I:gtm_char_t*, I:gtm_lon
 pcre2setheaplimit: gtm_long_t mpcre2_set_heap_limit(I:gtm_char_t*, I:gtm_long_t): SIGSAFE
 pcre2setmatchlimit: gtm_long_t mpcre2_set_match_limit(I:gtm_char_t*, I:gtm_long_t): SIGSAFE
 pcre2setdepthlimit: gtm_long_t mpcre2_set_depth_limit(I:gtm_char_t*, I:gtm_long_t): SIGSAFE
+pcre2substringcopybyname: gtm_long_t mpcre2_substring_copy_byname(I:gtm_char_t *, I:gtm_char_t *, O:gtm_string_t * [1048576])
+pcre2substringcopybynumber: gtm_long_t mpcre2_substring_copy_bynumber(I:gtm_char_t *, I:gtm_long_t, O:gtm_string_t * [1048576])
+pcre2substringfree: void mpcre2_substring_free(I:gtm_char_t *): SIGSAFE
+pcre2getmstringfrombuf: gtm_string_t* mpcre2_get_mstring_from_buf(I:gtm_char_t *, I:gtm_long_t): SIGSAFE
+pcre2substringgetbyname: gtm_long_t mpcre2_substring_get_byname(I:gtm_char_t *, I:gtm_char_t *, O:gtm_string_t * [80], O:gtm_long_t *): SIGSAFE
+pcre2substringgetbynumber: gtm_long_t mpcre2_substring_get_bynumber(I:gtm_char_t *, I:gtm_long_t, O:gtm_string_t * [80], O:gtm_long_t *): SIGSAFE
+pcre2substringlengthbyname: gtm_long_t mpcre2_substring_length_byname(I:gtm_char_t *, I:gtm_char_t *, O:gtm_long_t *): SIGSAFE
+pcre2substringlengthbynumber: gtm_long_t mpcre2_substring_length_bynumber(I:gtm_char_t *, I:gtm_long_t, O:gtm_long_t *): SIGSAFE

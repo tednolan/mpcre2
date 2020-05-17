@@ -106,7 +106,6 @@ int n_newline_opts = sizeof(newline_opts) / sizeof(struct opt_tab);
  * First we have a number of general utility functions that are not exported
  */
 
-
 /**
  * @brief Pcre2 compatibile wrapper for M malloc()
  *
@@ -454,6 +453,25 @@ void mpcre2_get_ov_pair(int count, gtm_char_t *ovector_str, gtm_long_t index, gt
 
 	*p0 = ov[index*2];
 	*p1 = ov[(index*2)+1];
+}
+
+/**
+ * @brief Copy a buffer allocated in C to an M string
+ * 
+ * @param count Parameter count from the M API
+ * @param buffer_ptr_str String handle for the buffer pointer
+ * @param len Length of the buffer
+ *
+ * @return a gtm_string_t with the buffer address and length
+ */
+gtm_string_t *mpcre2_get_mstring_from_buf(int count, gtm_char_t *buffer_ptr_str, gtm_long_t len) {
+
+	static gtm_string_t ret;
+
+	ret.address = pointer_decode(buffer_ptr_str);
+	ret.length = len;
+
+	return &ret;
 }
 
 /*
@@ -1345,6 +1363,229 @@ gtm_long_t mpcre2_set_depth_limit(int count,gtm_char_t *mcontext_str, gtm_long_t
 	return pcre2_set_depth_limit(mc, value);
 }
 
+/**
+ * @brief Wrap the pcre2_substring_copy_byname() function
+ *
+ * This function will return one of several PCRE2 errors on failure:
+ *	PCRE2_ERROR_NOSUBSTRING   there are no groups of that name
+ *	PCRE2_ERROR_UNAVAILABLE    the ovector was too small for that group
+ *	PCRE2_ERROR_UNSET         the group did not participate in the match
+ *	PCRE2_ERROR_NOMEMORY      the buffer is not big enough
+ *
+ * In C, these symbolic error codes can be used in code.  This is not the case
+ * in M, and libm_pcre2 does not currently provide a translation.  The current
+ * numerical values for these are, respectively: -49, -54, -55 & -48
+ *
+ * Note that this function does not need the "bufflen" parameter from the C
+ * version because the gtm_string_t type handles that.
+ *
+ * @param count Parameter count from the M API
+ * @param match_data_str String handle for pcre2 match data
+ * @param name Name of the captured substring
+ * @param buffer to receive the string
+ *
+ * @return 0 on success non-zero on error
+ */
+gtm_long_t mpcre2_substring_copy_byname(int count, gtm_char_t *match_data_str, gtm_char_t *name, gtm_string_t *buffer) {
+
+	pcre2_match_data *md;
+	int res;
+	PCRE2_SIZE len;
+
+	md = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	len = (PCRE2_SIZE) buffer->length;
+	res = pcre2_substring_copy_byname(md, (PCRE2_SPTR) name, (PCRE2_UCHAR *) buffer->address, &len);
+	buffer->length = len;
+
+	return res;
+}
+
+
+/**
+ * @brief Wrap the pcre2_substring_copy_bynumber() function
+ *
+ * This function will return one of several PCRE2 errors on failure:
+ *	PCRE2_ERROR_NOSUBSTRING   there are no groups of that number
+ *	PCRE2_ERROR_UNAVAILABLE    the ovector was too small for that group
+ *	PCRE2_ERROR_UNSET         the group did not participate in the match
+ *	PCRE2_ERROR_NOMEMORY      the buffer is not big enough
+ *
+ * In C, these symbolic error codes can be used in code.  This is not the case
+ * in M, and libm_pcre2 does not currently provide a translation.  The current
+ * numerical values for these are, respectively: -49, -54, -55 & -48
+ *
+ * Note that this function does not need the "bufflen" parameter from the C
+ * version because the gtm_string_t type handles that.
+ *
+ * @param count Parameter count from the M API
+ * @param match_data_str String handle for pcre2 match data
+ * @param number number of the captured substring
+ * @param buffer to receive the string
+ *
+ * @return 0 on success non-zero on error
+ */
+gtm_long_t mpcre2_substring_copy_bynumber(int count, gtm_char_t *match_data_str, gtm_long_t number, gtm_string_t *buffer) {
+
+	pcre2_match_data *md;
+	int res;
+	PCRE2_SIZE len;
+
+	md = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	len = (PCRE2_SIZE) buffer->length;
+	res = pcre2_substring_copy_bynumber(md, (uint32_t) number, (PCRE2_UCHAR *) buffer->address, &len);
+	buffer->length = len;
+
+	return res;
+}
+
+/**
+ * @brief Wrap the void pcre2_substring_free() function
+ *
+ * Free memory allocated by pcre2_substring_get_byname() or
+ * pcre2_substring_get_bynumber().
+ *
+ * @param count Parameter count from the M API
+ * @param buffer String handle for the buffer to free
+ *
+ * @return None
+ */
+void mpcre2_substring_free(int count, gtm_char_t *buffer_str) {
+
+	PCRE2_UCHAR *buffer;
+
+	buffer = (PCRE2_UCHAR *) pointer_decode(buffer_str);
+
+	pcre2_substring_free(buffer);
+}
+
+/**
+ * @brief Wrap the pcre2_substring_get_byname() function
+ *
+ * It is not clear that this function has any utility in an M environment.
+ * It is only useful with the helper function mpcre2_get_mstring_from_buf().
+ *
+ * @param count Parameter count from the M API
+ * @param match_data_str String handle for pcre2 match data
+ * @param name Name of the capture group
+ * @param bufferptr_str Where to store the pointer to the allocated buffer
+ * @param bufflen Where to store the length of the allocated buffer
+ *
+ * @return 0 on success non-zero on error
+ */
+int mpcre2_substring_get_byname(int count, gtm_char_t *match_data_str, gtm_char_t *name, gtm_string_t *bufferptr_str, gtm_long_t *bufflen) {
+	
+	pcre2_match_data *md;
+	PCRE2_UCHAR *bufferptr;
+	PCRE2_SIZE len;
+	int res;
+	static char buf[80];
+
+	md = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	res = pcre2_substring_get_byname(md, (PCRE2_SPTR) name, &bufferptr, &len);
+
+	pointer_encode(bufferptr, buf, sizeof(buf));
+
+	strncpy(bufferptr_str->address, buf, strlen(buf));
+
+	bufferptr_str->length = strlen(buf);
+
+	*bufflen = len;
+
+	return res;
+}
+
+
+/**
+ * @brief Wrap the pcre2_substring_get_bynumber() function
+ *
+ * It is not clear that this function has any utility in an M environment.
+ * It is only useful with the helper function mpcre2_get_mstring_from_buf().
+ *
+ * @param count Parameter count from the M API
+ * @param match_data_str String handle for pcre2 match data
+ * @param number Number of the capture group
+ * @param bufferptr_str Where to store the pointer to the allocated buffer
+ * @param bufflen Where to store the length of the allocated buffer
+ *
+ * @return 0 on success non-zero on error
+ */
+int mpcre2_substring_get_bynumber(int count, gtm_char_t *match_data_str, gtm_long_t number, gtm_string_t *bufferptr_str, gtm_long_t *bufflen) {
+	
+	pcre2_match_data *md;
+	PCRE2_UCHAR *bufferptr;
+	PCRE2_SIZE len;
+	int res;
+	static char buf[80];
+
+	md = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	res = pcre2_substring_get_bynumber(md, (uint32_t) number, &bufferptr, &len);
+
+	pointer_encode(bufferptr, buf, sizeof(buf));
+
+	strncpy(bufferptr_str->address, buf, strlen(buf));
+
+	bufferptr_str->length = strlen(buf);
+
+	*bufflen = len;
+
+	return res;
+}
+
+/**
+ * @brief Wrap the pcre2_substring_length_byname() function
+ *
+ * @param count Parameter count from the M API
+ * @param match_data_str String handle for pcre2 match data
+ * @param name Name of the capture group
+ * @param When to store the length of the capture
+ *
+ * @return 0 on success non-zero otherwise
+ */
+ gtm_long_t mpcre2_substring_length_byname(int count, gtm_char_t *match_data_str, gtm_char_t *name, gtm_long_t *length) {
+
+	pcre2_match_data *md;
+	PCRE2_SIZE len;
+	int res;
+
+	md = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	res = pcre2_substring_length_byname(md, (PCRE2_SPTR) name, &len);
+
+	*length = len;
+
+	return res;
+
+ }
+
+/**
+ * @brief Wrap the pcre2_substring_length_bynumber() function
+ *
+ * @param count Parameter count from the M API
+ * @param match_data_str String handle for pcre2 match data
+ * @param number Number of the capture group
+ * @param When to store the length of the capture
+ *
+ * @return 0 on success non-zero otherwise
+ */
+ gtm_long_t mpcre2_substring_length_bynumber(int count, gtm_char_t *match_data_str, gtm_long_t number, gtm_long_t *length) {
+
+	pcre2_match_data *md;
+	PCRE2_SIZE len;
+	int res;
+
+	md = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	res = pcre2_substring_length_bynumber(md, number, &len);
+
+	*length = len;
+
+	return res;
+
+ }
 
 /**
  * @brief Translate a pcre2_compile() error code into a text message
@@ -1372,12 +1613,6 @@ gtm_long_t mpcre2_get_error_message(int count, gtm_long_t errorcode, gtm_string_
 
 	return res;
 }
-
-
-
-
-
-
 
 /**
  * @brief Wrap the pcre2_substitute() function
