@@ -474,6 +474,68 @@ gtm_string_t *mpcre2_get_mstring_from_buf(int count, gtm_char_t *buffer_ptr_str,
 	return &ret;
 }
 
+/**
+ * @brief Return the number of captured substrings from a substring list
+ *
+ * This is a helper function for pcre2_substring_list_get() and requires
+ * that function to be called first to establish the two pointers used here.
+ *
+ * @param count Parameter count from the M API
+ * @param listptr_str String handle for the substring list
+ *
+ * @return The number of substrings in the list
+ */
+gtm_long_t mpcre2_get_substring_list_count(int count, gtm_char_t *listptr_str) {
+
+	PCRE2_UCHAR **listptr;
+	PCRE2_UCHAR *cpt;
+	int i;
+
+	listptr = (PCRE2_UCHAR **) pointer_decode(listptr_str);
+
+	/*
+	 * The end of the list is signaled by a NULL pointer.  Obviously we
+	 * are hosed if it is not there.
+	 */
+	if (!listptr[0])
+		return 0;
+
+	for(i = 0;; ++i) {
+		cpt = listptr[i];
+		if (!cpt)
+			break;
+	}
+
+	return i-1;
+}
+
+/**
+ * @brief Return an M string from a pcre2 substring list
+ *
+ * This is a utility function to support pcre2_substring_list_get()
+ *
+ * @param count Parameter count from the M API
+ * @param listptr_str String handle for a pcre2 substring list
+ * @param lenptr_str String handle for a pcre2 length list
+ * @param index Index in the list of the string to return
+ *
+ * @return The given string value as an M string
+ */
+gtm_string_t *mpcre2_get_mstring_from_substring_list(int count, gtm_char_t *listptr_str, gtm_char_t *lenptr_str, gtm_long_t index) {
+
+	PCRE2_UCHAR **listptr;
+	PCRE2_SIZE *lenptr;
+	static gtm_string_t ret;
+
+	listptr = (PCRE2_UCHAR **) pointer_decode(listptr_str);
+	lenptr = (PCRE2_SIZE *) pointer_decode(lenptr_str);
+
+	ret.address = (char *) listptr[index];
+	ret.length = lenptr[index];
+
+	return &ret;
+}
+
 /*
  * This section contains functions which are exported and are 1 for 1 wrappings
  * of PCRE2 functions.  They are listed in the order given in the PCRE2
@@ -1612,6 +1674,59 @@ gtm_long_t mpcre2_substring_number_from_name(int count, gtm_char_t *code_str, gt
 	return pcre2_substring_number_from_name(code, (PCRE2_SPTR) name);
 }
 
+/**
+ * @brief Wrap the pcre2_substring_list_free() function.
+ *
+ * @param count Parameter count from the M API
+ * @param list_str String handle for a pcre2 substring list
+ *
+ * @reutnr None
+ *
+ */
+void mpcre2_substring_list_free(int count, gtm_char_t *list_str) {
+	
+	PCRE2_SPTR *list;
+
+	list = (PCRE2_SPTR *) pointer_decode(list_str);
+
+	pcre2_substring_list_free(list);
+}
+
+/**
+ * @brief Wrap the pcre2_substring_list_get() function.
+ *
+ * To be useful from M, this function must be used in conjunction with the
+ * utilitiy functions pcre2_get_substring_list_count() & pcre2_get_mstring_from_substring_list().
+ *
+ * @param count Parameter count from the M API
+ * @param match_data_str String handle for pcre2 match data
+ * @param listptr_str Variable to hold the handle for the substring list
+ * @param lengthsptr_str Variable to hold the handle for the lengths list
+ *
+ * @return 0 on success, non-zero on error
+ */
+gtm_long_t mpcre2_substring_list_get(int count, gtm_char_t *match_data_str, gtm_string_t *listptr_str, gtm_string_t *lengthsptr_str) {
+
+	pcre2_match_data *md;
+	PCRE2_UCHAR **listptr;
+	PCRE2_SIZE *lengthsptr;
+	char buf[80];
+	int res;
+
+	md = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	res = pcre2_substring_list_get(md, &listptr, &lengthsptr);
+
+	pointer_encode(listptr, buf, sizeof(buf));
+	strncpy(listptr_str->address, buf, strlen(buf));
+	listptr_str->length = strlen(buf);
+
+	pointer_encode(lengthsptr, buf, sizeof(buf));
+	strncpy(lengthsptr_str->address, buf, strlen(buf));
+	lengthsptr_str->length = strlen(buf);
+
+	return res;
+}
 
 /**
  * @brief Translate a pcre2_compile() error code into a text message
