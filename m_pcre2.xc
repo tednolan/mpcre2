@@ -43,3 +43,4 @@ pcre2substringgetbyname: gtm_long_t mpcre2_substring_get_byname(I:gtm_char_t *, 
 pcre2substringgetbynumber: gtm_long_t mpcre2_substring_get_bynumber(I:gtm_char_t *, I:gtm_long_t, O:gtm_string_t * [80], O:gtm_long_t *): SIGSAFE
 pcre2substringlengthbyname: gtm_long_t mpcre2_substring_length_byname(I:gtm_char_t *, I:gtm_char_t *, O:gtm_long_t *): SIGSAFE
 pcre2substringlengthbynumber: gtm_long_t mpcre2_substring_length_bynumber(I:gtm_char_t *, I:gtm_long_t, O:gtm_long_t *): SIGSAFE
+pcre2substringnumberfromname: gtm_long_t mpcre2_substring_number_from_name(I:gtm_char_t *, I:gtm_char_t *): SIGSAFE

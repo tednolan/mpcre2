@@ -1587,6 +1587,32 @@ int mpcre2_substring_get_bynumber(int count, gtm_char_t *match_data_str, gtm_lon
 
  }
 
+/*
+ * The pcre2_substring_nametable_scan() function would go here.
+ *
+ * However, it seems neither straight-forward nor obviously desirable
+ * to provide this function in M, so for now it is not wrapped.
+ */
+
+/**
+ * @brief Wrap the pcre2_substring_number_from_name() function
+ *
+ * @param count Parameter count from the M API
+ * @param code_str String handle for a pcre2 compiled regular expression
+ * @param name name of the capture group to map
+ *
+ * @return Either the number of the parentheses for the name or a negative error number (see pcre2.h)
+ */
+gtm_long_t mpcre2_substring_number_from_name(int count, gtm_char_t *code_str, gtm_char_t *name) {
+
+	pcre2_code *code;
+
+	code = (pcre2_code *) pointer_decode(code_str);
+
+	return pcre2_substring_number_from_name(code, (PCRE2_SPTR) name);
+}
+
+
 /**
  * @brief Translate a pcre2_compile() error code into a text message
  *
