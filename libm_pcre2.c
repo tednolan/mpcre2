@@ -1728,32 +1728,6 @@ gtm_long_t mpcre2_substring_list_get(int count, gtm_char_t *match_data_str, gtm_
 	return res;
 }
 
-/**
- * @brief Translate a pcre2_compile() error code into a text message
- *
- * This function provides an M interface to translate a pcre2_compile() error code to a
- * string.  The interface differs a bit from the C function wrapped as the M string
- * supplies its own (max) length.
- *
- * @param count M API supplied argument count
- * @param errorcode Code to be mapped to a string
- *
- */
-gtm_long_t mpcre2_get_error_message(int count, gtm_long_t errorcode, gtm_string_t *buffer) {
-
-	gtm_long_t res;
-
-	res = pcre2_get_error_message( (int) errorcode, (PCRE2_UCHAR *) buffer->address,
-		buffer->length);
-
-	if (res < 0) {
-		buffer->length = 0;
-	} else {
-		buffer->length = res;
-	}
-
-	return res;
-}
 
 /**
  * @brief Wrap the pcre2_substitute() function
@@ -1844,5 +1818,181 @@ gtm_long_t mpcre2_jit_compile(int count, gtm_char_t *code_str, gtm_char_t *optio
 
 	return pcre2_jit_compile(code, options);
 }
+
+/**
+ * @brief Wrap the pcre2_jit_match() function
+ *
+ * We bring in "subject" as an M string, so we can have embedded zero bytes.  This gives
+ * us a length, so we don't have a separate parameter for that.
+ *
+ * @param count Count of parameters from the M API
+ * @param code_str A pcre2 JIT compiled regular expression pointer in string format
+ * @param subject The string to search for matches
+ * @param startoffset The byte offset at which to start the match search
+ * @param options Pcre2 match options in string form
+ * @param match_data_str A Pcre2 match data pointer in string format
+ * @param mcontext_str A Pcre2 match context pointer in string format, or "0"
+ *
+ * @return < 0 on error or no match, 0 vector offests too small, else one more than the highest numbered capturing pair that has been set
+ */
+gtm_long_t mpcre2_jit_match(int count, gtm_char_t *code_str, gtm_string_t *subject,
+	gtm_long_t startoffset, gtm_char_t *options_str, gtm_char_t *match_data_str,
+	gtm_char_t *mcontext_str) {
+
+	pcre2_code *code;
+	pcre2_match_data *match_data;
+	pcre2_match_context *mc;
+	uint32_t options;
+	int must_free;
+	gtm_long_t res;
+
+	code = (pcre2_code *) pointer_decode(code_str);
+
+	if (parse_pcre2_options(match_opts, n_match_opts, "match", options_str, &options) < 0) {
+		return -1;
+	}
+
+	match_data = (pcre2_match_data *) pointer_decode(match_data_str);
+
+	mc = get_match_context(mcontext_str, &must_free);
+
+	res = pcre2_jit_match(code, (PCRE2_SPTR) subject->address, (PCRE2_SIZE) subject->length,
+		(PCRE2_SIZE) startoffset, options, match_data, mc);
+
+	if (must_free) {
+		pcre2_match_context_free(mc);
+	}
+
+	return res;
+}
+
+/**
+ * @brief Wrap the pcre2_jit_free_unused_memory() function
+ *
+ * If a string handle for a general context is passed, it will be used.  If "0" is passed, the
+ * internal general context, which used M malloc & free functions will be used.
+ *
+ * @param count Parameter count from the M API
+ * @param gcontext_str A string handle for a general context or "0" for the internal general context
+ *
+ * @return None
+ */
+ void mpcre2_jit_free_unused_memory(int count, gtm_char_t *gcontext_str) {
+
+	pcre2_general_context *gc;
+
+	gc = get_general_context(gcontext_str);
+
+	pcre2_jit_free_unused_memory(gc);
+ }
+
+/**
+ * @brief Wrap the pcre2_jit_stack_create() function
+ *
+ * @param count Parameter count from the M API
+ * @param startsize Starting size for the stack
+ * @param maxsize Maximum size for the stack
+ * @param gcontext_str String handle for a pcre2 general context, "NULL" for the default.
+ *
+ * @return String handle for a pcre2_jit_stack
+ */
+gtm_char_t *mpcre2_jit_stack_create(int count, gtm_long_t startsize, gtm_long_t maxsize, gtm_char_t *gcontext_str) {
+	
+	pcre2_general_context *gc;
+	pcre2_jit_stack *sptr;
+	static char buf[80];
+
+	gc = get_general_context(gcontext_str);
+
+	sptr = pcre2_jit_stack_create((PCRE2_SIZE) startsize, (PCRE2_SIZE) maxsize, gc);
+
+	pointer_encode(sptr, buf, sizeof(buf));
+
+	return buf;
+}
+
+/**
+ * @brief Wrap the pcre2_jit_stack_assign() function
+ *
+ * The libm_pcre2 library currently provides no way to specify a callback function, but
+ * if another plugin creates an appropriate string handle, it may be used.  Otherwise, specify
+ * "NULL" for the callback, and either a default stack will be used (if callback data is also "NULL")
+ * or a stack allocated by pcre2_jit_stack_create will be used (if callback data is not null).
+ *
+ * @param count Parameter count from the M API
+ * @param mcontext_str String handle for a pcre2 match context
+ * @param callback_function_str String handle for a function to allocate a JIT stack, or "NULL".
+ * @param callback_data_str String handle for a pcre2 JIT stack, or "NULL"
+ *
+ * @return None
+ */
+void mpcre2_jit_stack_assign(int count, gtm_char_t *mcontext_str, gtm_char_t *callback_function_str, gtm_char_t *callback_data_str) {
+	
+	pcre2_match_context *mc;
+	pcre2_jit_callback cbf;
+	void *cbd;
+
+	mc = (pcre2_match_context *) pointer_decode(mcontext_str);
+
+	if (strcmp(callback_function_str, "NULL") == 0) {
+		cbf = NULL;
+	} else {
+		cbf = (pcre2_jit_callback) pointer_decode(callback_function_str);
+	}
+
+	if (strcmp(callback_data_str, "NULL") == 0) {
+		cbd = NULL;
+	} else {
+		cbd = pointer_decode(callback_data_str);
+	}
+
+	pcre2_jit_stack_assign(mc, cbf, cbd);
+}
+
+/**
+ * @brief Wrap the pcre2_jit_stack_free() function
+ *
+ * @param count Parameter count from the M API
+ * @param jit_stack_str String handle for a pcre2 JIT stack
+ *
+ * @return None
+ */
+void mpcre2_jit_stack_free(int count, gtm_char_t *jit_stack_str) {
+
+	pcre2_jit_stack *jit;
+
+	jit = (pcre2_jit_stack *) pointer_decode(jit_stack_str);
+
+	pcre2_jit_stack_free(jit);
+}
+
+/**
+ * @brief Translate a pcre2_compile() error code into a text message
+ *
+ * This function provides an M interface to translate a pcre2_compile() error code to a
+ * string.  The interface differs a bit from the C function wrapped as the M string
+ * supplies its own (max) length.
+ *
+ * @param count M API supplied argument count
+ * @param errorcode Code to be mapped to a string
+ *
+ */
+gtm_long_t mpcre2_get_error_message(int count, gtm_long_t errorcode, gtm_string_t *buffer) {
+
+	gtm_long_t res;
+
+	res = pcre2_get_error_message( (int) errorcode, (PCRE2_UCHAR *) buffer->address,
+		buffer->length);
+
+	if (res < 0) {
+		buffer->length = 0;
+	} else {
+		buffer->length = res;
+	}
+
+	return res;
+}
+
+
 
 

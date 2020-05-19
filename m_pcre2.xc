@@ -48,4 +48,8 @@ pcre2substringlistget: gtm_long_t mpcre2_substring_list_get(I:gtm_char_t *, O:gt
 pcre2getsubstringlistcount: gtm_long_t mpcre2_get_substring_list_count(I:gtm_char_t *): SIGSAFE
 pcre2getmstringfromsubstringlist: gtm_string_t *mpcre2_get_mstring_from_substring_list(I:gtm_char_t *, I:gtm_char_t *, I:gtm_long_t): SIGSAFE
 pcre2substringlistfree: void mpcre2_substring_list_free(I:gtm_char_t *): SIGSAFE
-
+pcre2jitmatch: gtm_long_t mpcre2_jit_match(I:gtm_char_t*, I:gtm_string_t*, I:gtm_long_t, I:gtm_char_t*, I:gtm_char_t*, I:gtm_char_t*): SIGSAFE
+pcre2jitfreeunusedmemory: void mpcre2_jit_free_unused_memory(I:gtm_char_t *): SIGSAFE
+pcre2jitstackcreate: gtm_char_t *mpcre2_jit_stack_create(I:gtm_long_t , I:gtm_long_t , I:gtm_char_t *): SIGSAFE
+pcre2jitstackassign: void mpcre2_jit_stack_assign(I:gtm_char_t *, I:gtm_char_t *, I:gtm_char_t *): SIGSAFE
+pcre2jitstackfree: void mpcre2_jit_stack_free(I:gtm_char_t *): SIGSAFE
