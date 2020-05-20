@@ -53,3 +53,7 @@ pcre2jitfreeunusedmemory: void mpcre2_jit_free_unused_memory(I:gtm_char_t *): SI
 pcre2jitstackcreate: gtm_char_t *mpcre2_jit_stack_create(I:gtm_long_t , I:gtm_long_t , I:gtm_char_t *): SIGSAFE
 pcre2jitstackassign: void mpcre2_jit_stack_assign(I:gtm_char_t *, I:gtm_char_t *, I:gtm_char_t *): SIGSAFE
 pcre2jitstackfree: void mpcre2_jit_stack_free(I:gtm_char_t *): SIGSAFE
+pcre2serializedecode: gtm_long_t mpcre2_serialize_decode(O:gtm_string_t * [80], I:gtm_long_t, I:gtm_char_t *, I:gtm_char_t *): SIGSAFE
+pcre2serializeencode: gtm_long_t mpcre2_serialize_encode(I:gtm_char_t *, I:gtm_long_t , O:gtm_string_t * [1024], O:gtm_long_t *, I:gtm_char_t *): SIGSAFE 
+pcre2serializefree: void mpcre2_serialize_free(I:gtm_char_t *): SIGSAFE
+pcre2serializegetnumberofcodes: gtm_long_t mpcre2_serialize_get_number_of_codes(I:gtm_char_t *): SIGSAFE

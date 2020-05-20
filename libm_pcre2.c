@@ -147,6 +147,13 @@ static void *pointer_decode(char *pstr) {
 	void *outptr;
 	unsigned long long p;	/* should work on 32 or 64 bit system */
 
+	/*
+	 * Take a "0", or "NULL" into a NULL pointer
+	 */
+	if ((strcmp(pstr, "0") == 0) || (strcmp(pstr, "NULL") == 0) ) {
+		return NULL;
+	}
+
 	if (sscanf(pstr, "%llu", &p) != 1) {
 		fprintf(stderr, "Cannot convert %s to a pointer\n", pstr);
 		return NULL;
@@ -599,7 +606,6 @@ gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options
 
 	*erroroffset = eoffset;
 	*errorcode = ecode;
-	fprintf(stderr, "eoff = %ld, ecode = %d, ptr %p\n", eoffset, ecode,code);
 
 	if (!code) {
 		return null_string;
@@ -1239,7 +1245,7 @@ gtm_char_t *mpcre2_match_context_create(int count, gtm_char_t *gcontext_str) {
 	pcre2_match_context *mc;
 	static char buf[80];
 
-	gc = (pcre2_general_context *) pointer_decode(gcontext_str);
+	gc = get_general_context(gcontext_str);
 
 	mc = pcre2_match_context_create(gc);
 
@@ -1965,6 +1971,117 @@ void mpcre2_jit_stack_free(int count, gtm_char_t *jit_stack_str) {
 
 	pcre2_jit_stack_free(jit);
 }
+
+/**
+ * @brief Wrap the pcre2_serialize_decode() function
+ *
+ * @param count Parameter count from the M API
+ * @param codes_str A string handle for an array of pcre2 compiled regular expression code slots
+ * @param number_of_codes The number of code slots in the codes array
+ * @param bytes_str A string handle for a block of serialized pcre2 compiled regexp codes
+ * @param gcontext_str String handle for a pcre2 general context or "NULL"
+ *
+ * @return A non-negative count on the number of codes loaded or a negative error code.
+ */
+gtm_long_t mpcre2_serialize_decode(int count, gtm_string_t *codes_str, gtm_long_t number_of_codes, gtm_char_t *bytes_str,
+	gtm_char_t *gcontext_str) {
+
+	pcre2_code *codes;
+	pcre2_general_context *gc;
+	int32_t res;
+	static char buf[80];
+	const uint8_t *bytes;
+
+	gc = get_general_context(gcontext_str);
+	bytes = (uint8_t *) pointer_decode(bytes_str);
+
+	res = pcre2_serialize_decode(&codes, (int32_t) number_of_codes, bytes, gc);
+
+	pointer_encode(codes, buf, sizeof(buf));
+	strncpy(codes_str->address, buf, strlen(buf));
+	codes_str->length = strlen(buf);
+
+	return res;
+
+}
+
+
+/**
+ * @brief Wrap the pcre2_serialize_encode() function
+ *
+ * @param count Parameter count from the M API
+ * @param codes_str String handle for a pcre2 array of compiled regular expressions
+ * @param number_of_codes The number of codes in the array
+ * @param serialized_bytes_str M storage to hold the serialized expressions
+ * @param serialized_size Where to store the number of bytes in the serialized rendition
+ * @param gcontext_str String handle for a pcre2 general context
+ *
+ * @return A non-negative count of serialized patterns, or a negative error number
+ */
+gtm_long_t mpcre2_serialize_encode(int count, gtm_char_t *codes_str, gtm_long_t number_of_codes, gtm_string_t *serialized_bytes_str,
+	gtm_long_t *serialized_size, gtm_char_t *gcontext_str) {
+
+	const pcre2_code *codes;
+	pcre2_general_context *gc;
+	int32_t res;
+	uint8_t *serialized_bytes;
+	PCRE2_SIZE get_serialized_size;
+	static char buf[80];
+
+	codes = (pcre2_code *) pointer_decode(codes_str);
+	gc = get_general_context(gcontext_str);
+
+	res = pcre2_serialize_encode(&codes, (int32_t) number_of_codes, &serialized_bytes, &get_serialized_size, gc);
+
+	pointer_encode(serialized_bytes, buf, sizeof(buf));
+	strncpy(serialized_bytes_str->address, buf, strlen(buf));
+	serialized_bytes_str->length = strlen(buf);
+	*serialized_size = get_serialized_size;
+
+	return res;
+}
+
+int32_t pcre2_serialize_encode(const pcre2_code **codes, int32_t number_of_codes, uint8_t **serialized_bytes, PCRE2_SIZE *serialized_size, pcre2_general_context *gcontext);
+
+/**
+ * @brief Wrap the void pcre2_serialize_free() function
+ *
+ * It is important to note that only storage allocated inside pcre2 should be freed here.
+ * If you, say, read the serialized data from disk, you should *not* free that here.
+ *
+ * @param count Parameter count from the M API
+ * @param bytes_str String handle to a pcre2 allocated block of serialized regex codes
+ *
+ * @return None
+ */
+ void mpcre2_serialize_free(int count, gtm_char_t *bytes_str) {
+
+ 	uint8_t *bytes;
+
+	bytes = (uint8_t *) pointer_decode(bytes_str);
+
+	pcre2_serialize_free(bytes);
+ }
+
+ /**
+  * @brief Wrap the pcre2_serialize_get_number_of_codes() function
+  *
+  * @param count Parameter count from the M API
+  * @param bytes_str String handle to a block of serialized pcre2 regex codes
+  *
+  * @return A non-negative count of the number of codes in the block, or a negative error code
+  *
+  */
+gtm_long_t mpcre2_serialize_get_number_of_codes(int count, gtm_char_t *bytes_str) {
+	
+	uint8_t *bytes;
+
+	bytes = (uint8_t *) pointer_decode(bytes_str);
+
+	return pcre2_serialize_get_number_of_codes(bytes);
+}
+
+
 
 /**
  * @brief Translate a pcre2_compile() error code into a text message
