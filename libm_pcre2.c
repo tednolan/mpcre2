@@ -102,6 +102,39 @@ struct opt_tab newline_opts [] = {
 };
 int n_newline_opts = sizeof(newline_opts) / sizeof(struct opt_tab);
 
+/* The parser will allow ORing these with '|', but don't do that */
+struct opt_tab info_opts [] = {
+	{ "PCRE2_INFO_ALLOPTIONS", PCRE2_INFO_ALLOPTIONS },
+	{ "PCRE2_INFO_ARGOPTIONS", PCRE2_INFO_ARGOPTIONS },
+	{ "PCRE2_INFO_BACKREFMAX", PCRE2_INFO_BACKREFMAX },
+	{ "PCRE2_INFO_BSR", PCRE2_INFO_BSR },
+	{ "PCRE2_INFO_CAPTURECOUNT", PCRE2_INFO_CAPTURECOUNT },
+	{ "PCRE2_INFO_FIRSTCODEUNIT", PCRE2_INFO_FIRSTCODEUNIT },
+	{ "PCRE2_INFO_FIRSTCODETYPE", PCRE2_INFO_FIRSTCODETYPE },
+	{ "PCRE2_INFO_FIRSTBITMAP", PCRE2_INFO_FIRSTBITMAP },
+	{ "PCRE2_INFO_HASCRORLF", PCRE2_INFO_HASCRORLF },
+	{ "PCRE2_INFO_JCHANGED", PCRE2_INFO_JCHANGED },
+	{ "PCRE2_INFO_JITSIZE", PCRE2_INFO_JITSIZE },
+	{ "PCRE2_INFO_LASTCODEUNIT", PCRE2_INFO_LASTCODEUNIT },
+	{ "PCRE2_INFO_LASTCODETYPE", PCRE2_INFO_LASTCODETYPE },
+	{ "PCRE2_INFO_MATCHEMPTY", PCRE2_INFO_MATCHEMPTY },
+	{ "PCRE2_INFO_MATCHLIMIT", PCRE2_INFO_MATCHLIMIT },
+	{ "PCRE2_INFO_MAXLOOKBEHIND", PCRE2_INFO_MAXLOOKBEHIND },
+	{ "PCRE2_INFO_MINLENGTH", PCRE2_INFO_MINLENGTH },
+	{ "PCRE2_INFO_NAMECOUNT", PCRE2_INFO_NAMECOUNT },
+	{ "PCRE2_INFO_NAMEENTRYSIZE", PCRE2_INFO_NAMEENTRYSIZE },
+	{ "PCRE2_INFO_NAMETABLE", PCRE2_INFO_NAMETABLE },
+	{ "PCRE2_INFO_NEWLINE", PCRE2_INFO_NEWLINE },
+	{ "PCRE2_INFO_DEPTHLIMIT", PCRE2_INFO_DEPTHLIMIT },
+	{ "PCRE2_INFO_RECURSIONLIMIT", PCRE2_INFO_RECURSIONLIMIT },
+	{ "PCRE2_INFO_SIZE", PCRE2_INFO_SIZE },
+	{ "PCRE2_INFO_HASBACKSLASHC", PCRE2_INFO_HASBACKSLASHC },
+	{ "PCRE2_INFO_FRAMESIZE", PCRE2_INFO_FRAMESIZE },
+	{ "PCRE2_INFO_HEAPLIMIT", PCRE2_INFO_HEAPLIMIT },
+	{ "PCRE2_INFO_EXTRAOPTIONS", PCRE2_INFO_EXTRAOPTIONS },
+};
+int n_info_opts = sizeof(info_opts) / sizeof(struct opt_tab);
+
 /*
  * First we have a number of general utility functions that are not exported
  */
@@ -207,7 +240,7 @@ static void pointer_encode(void *ptr, char *buf, int size) {
  * called from M.  We could use names if we linked to the callin shared library,
  * but that would be * an additional dependency.
  *
- * @param general_context_str For "0" we create & return (or just return) the static GC.  Otherwise decode as a pointer
+ * @param general_context_str For "0" or "NULL" we create & return (or just return) the static GC.  Otherwise decode as a pointer
  *
  * @return A pcre2_general_context pointer, or NULL on failure
  */
@@ -2081,6 +2114,53 @@ gtm_long_t mpcre2_serialize_get_number_of_codes(int count, gtm_char_t *bytes_str
 	return pcre2_serialize_get_number_of_codes(bytes);
 }
 
+/**
+ * @brief Wrap the pcre2_code_copy() function
+ *
+ * @param count Parameter count from the M API
+ * @param code_str A string handle to a pcre2 compiled expression
+ *
+ * @return A string handle for a copy of the input compiled expression
+ *
+ */
+gtm_char_t *mpcre2_code_copy(int count, gtm_char_t *code_str) {
+
+	pcre2_code *code;
+	pcre2_code *new_code;
+	static char buf[80];
+
+	code = (pcre2_code *) pointer_decode(code_str);
+
+	new_code = pcre2_code_copy(code);
+
+	pointer_encode(new_code, buf, sizeof(buf));
+
+	return buf;
+}
+
+/**
+ * @brief Wrap the pcre2_code_copy_with_tables() function
+ *
+ * @param count Parameter count from the M API
+ * @param code_str A string handel for a pcre2 compiled expression
+ *
+ * @return A string handle for a copy of the input compiled expression
+ *
+ */ 
+gtm_char_t *mpcre2_code_copy_with_tables(int count, gtm_char_t *code_str) {
+
+	pcre2_code *code;
+	pcre2_code *new_code;
+	static char buf[80];
+
+	code = (pcre2_code *) pointer_decode(code_str);
+
+	new_code = pcre2_code_copy_with_tables(code);
+
+	pointer_encode(new_code, buf, sizeof(buf));
+
+	return buf;
+}
 
 
 /**
@@ -2110,6 +2190,151 @@ gtm_long_t mpcre2_get_error_message(int count, gtm_long_t errorcode, gtm_string_
 	return res;
 }
 
+/*
+ * @brief Wrap the pcre2_maketables() function
+ *
+ * @param count The parameter count from the M API
+ * @param gcontext_str A string handle for a PCRE2 general context
+ *
+ */
+gtm_char_t *mpcre2_maketables(int count, gtm_char_t *gcontext_str) {
+
+	pcre2_general_context *gc;
+	static char buf[80];
+	const unsigned char *p;
+
+	gc = get_general_context(gcontext_str);
+
+	p = pcre2_maketables(gc);
+
+	pointer_encode( (void *)p, buf, sizeof(buf));
+
+	return buf;
+}
+
+/**
+ * @brief Wrap the pcre2_pattern_info() function
+ *
+ * Note that currently no decoding is provided for the results of this function.
+ * The programmer must consult the PCRE2 documentation and the pcre2.h file to
+ * understand the return values.
+ *
+ * @param count Parameter count from the M API
+ * @param code_str String handle for compiled PCRE2 expression
+ * @param what_str String representation of the PCRE2 INFO option being queried
+ * @param where M string into which the result is stored
+ * 
+ */
+gtm_long_t mpcre2_pattern_info(int count, gtm_char_t *code_str, gtm_char_t *what_str, gtm_string_t *where) {
+
+	uint32_t info_options;
+	int res;
+	pcre2_code *code;
+	char buf[1024];
+
+	union what {
+		uint32_t uint32_val;
+		size_t size_val;
+		const uint8_t *uint8_ptr_val;
+		PCRE2_SPTR pcre2sptr_val;
+	} what;
+
+	code = (pcre2_code *) pointer_decode(code_str);
+
+	/*
+	 * Now we have to get the query
+	 */
+	if (parse_pcre2_options(info_opts, n_info_opts, "info", what_str, &info_options) < 0) {
+		return PCRE2_ERROR_BADOPTION ;
+	}
 
 
+	res = pcre2_pattern_info(code, info_options, (void *) &what);
+	if (res < 0) {
+		return res;
+	}
+	/*
+	 * The result type returned by pcre2_pattern_info() varies according to what is queried
+	 * In general, it won't make much difference here as we don't return raw C data types to M
+	 * but still we want different cases for each return type should we need to do something
+	 * different with each in the future
+	 */
+	switch(info_options) {
+		
+		/*
+		 * All of these return uint32_t values
+		 */
+		case PCRE2_INFO_ALLOPTIONS:
+		case PCRE2_INFO_ARGOPTIONS:
+		case PCRE2_INFO_EXTRAOPTIONS:
+		case PCRE2_INFO_BACKREFMAX:
+		case PCRE2_INFO_BSR:
+		case PCRE2_INFO_CAPTURECOUNT:
+		case PCRE2_INFO_DEPTHLIMIT:
+		case PCRE2_INFO_FIRSTCODETYPE:
+		case PCRE2_INFO_FIRSTCODEUNIT:
+		case PCRE2_INFO_HASBACKSLASHC:
+		case PCRE2_INFO_HASCRORLF:
+		case PCRE2_INFO_HEAPLIMIT:
+		case PCRE2_INFO_JCHANGED:
+		case PCRE2_INFO_LASTCODETYPE:
+		case PCRE2_INFO_LASTCODEUNIT:
+		case PCRE2_INFO_MATCHEMPTY:
+		case PCRE2_INFO_MATCHLIMIT:
+		case PCRE2_INFO_MAXLOOKBEHIND:
+		case PCRE2_INFO_MINLENGTH:
+		case PCRE2_INFO_NAMECOUNT:
+		case PCRE2_INFO_NAMEENTRYSIZE:
+		case PCRE2_INFO_NEWLINE:
 
+			snprintf(buf, sizeof(buf), "%u", what.uint32_val);
+			where->length = strlen(buf);
+			memcpy(where->address, buf, strlen(buf));
+
+			return res;
+			break;
+
+		/*
+		 * These return a pointer to a uint8_t *
+		 */
+		case PCRE2_INFO_FIRSTBITMAP:
+
+			pointer_encode( (void *) what.uint8_ptr_val, buf, sizeof(buf));
+			where->length = strlen(buf);
+			memcpy(where->address, buf, strlen(buf));
+
+			return res;
+			break;
+
+		/*
+		 * These return a size_t
+		 */
+		case PCRE2_INFO_FRAMESIZE:
+		case PCRE2_INFO_JITSIZE:
+		case PCRE2_INFO_SIZE:
+
+			snprintf(buf, sizeof(buf), "%lu", what.size_val);
+			where->length = strlen(buf);
+			memcpy(where->address, buf, strlen(buf));
+
+			return res;
+			break;
+
+		/*
+		 * These return a PCRE2_SPTR.  Good luck using these from M.
+		 */
+		 	pointer_encode( (void *) what.pcre2sptr_val, buf, sizeof(buf));
+			where->length = strlen(buf);
+			memcpy(where->address, buf, strlen(buf));
+
+			return res;
+			break;
+
+		/*
+		 * Should never happen
+		 */
+		default:
+			return PCRE2_ERROR_BADOPTION ;
+			
+	}
+}
