@@ -1,21 +1,38 @@
+/**
+ * @file
+ *
+ * @brief The mpcre2 plugin provides an M interfact to the C pcre2 regular expression library
+ *
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+
+/**
+* @brief This macro must be defined before including pcre2.h.  It sets our default code unit size to 8 (byte) 
+*/
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
 #include "gtmxc_types.h"
 
-static void* (*malloc_fn)(int);
-static void (*free_fn)(void*);
+static void* (*malloc_fn)(int);		///< Pointer to GT.M malloc function
+static void (*free_fn)(void*);		///< Pointer to GT.M free function
 
+/**
+ * This type is used in tables which translate M strings to C macro values
+ */
 typedef struct opt_tab {
-	const char *name;
-	uint32_t val;
+	const char *name;	///< M string
+	uint32_t val;		///< C value mapping
 } opt_tab_t;
 
-static char *null_string = "";
+static char *null_string = "";	///< An empty string used for results
 
+/**
+* This table maps PCRE2 regular expression compile options from M strings
+* to C macro values
+*/
 struct opt_tab compile_opts [] = {
 	{ "PCRE2_ANCHORED", PCRE2_ANCHORED },
 	{ "PCRE2_ALLOW_EMPTY_CLASS", PCRE2_ALLOW_EMPTY_CLASS },
@@ -46,18 +63,24 @@ struct opt_tab compile_opts [] = {
 	{ "PCRE2_USE_OFFSET_LIMIT", PCRE2_USE_OFFSET_LIMIT },
 	{ "PCRE2_UTF", PCRE2_UTF },
 };
-int n_compile_opts = sizeof(compile_opts) / sizeof(struct opt_tab);
+int n_compile_opts = sizeof(compile_opts) / sizeof(struct opt_tab);	///< The number of compile options implemented
 
+/**
+ * This table maps PCRE2 "extra" regular expression compile options
+ * from M strings to C macro values
+ */
 struct opt_tab extra_compile_opts [] = {
 	{ "PCRE2_EXTRA_ALLOW_SURROGATE_ESCAPES", PCRE2_EXTRA_ALLOW_SURROGATE_ESCAPES },
 	{ "PCRE2_EXTRA_BAD_ESCAPE_IS_LITERAL", PCRE2_EXTRA_BAD_ESCAPE_IS_LITERAL },
 	{ "PCRE2_EXTRA_MATCH_LINE", PCRE2_EXTRA_MATCH_LINE },
 	{ "PCRE2_EXTRA_MATCH_WORD", PCRE2_EXTRA_MATCH_WORD },
 };
-int n_extra_compile_opts = sizeof(extra_compile_opts) / sizeof(struct opt_tab);
+int n_extra_compile_opts = sizeof(extra_compile_opts) / sizeof(struct opt_tab);	///< The number of extra compile options implemented
 
-/*
- * This table has both match and substitute options, because pcre2_substitute()
+/**
+ * This table maps PCRE2 match and substitute options from M strings to C macro values
+ *
+ * It has both match and substitute options, because pcre2_substitute()
  * takes many of the match options
  */
 struct opt_tab match_opts [] = {
@@ -77,21 +100,30 @@ struct opt_tab match_opts [] = {
 	{ "PCRE2_SUBSTITUTE_UNKNOWN_UNSET", PCRE2_SUBSTITUTE_UNKNOWN_UNSET },
 	{ "PCRE2_SUBSTITUTE_UNSET_EMPTY", PCRE2_SUBSTITUTE_UNSET_EMPTY },
 };
-int n_match_opts = sizeof(match_opts) / sizeof(struct opt_tab);
+int n_match_opts = sizeof(match_opts) / sizeof(struct opt_tab);		///< The number of match and substitute options supported
 
+/**
+ * This table maps PCRE2 Just In Time (JIT) options to from M strings to C macro values
+ */
 struct opt_tab jit_opts [] = {
 	{ "PCRE2_JIT_COMPLETE", PCRE2_JIT_COMPLETE },
 	{ "PCRE2_JIT_PARTIAL_SOFT", PCRE2_JIT_PARTIAL_SOFT },
 	{ "PCRE2_JIT_PARTIAL_HARD", PCRE2_JIT_PARTIAL_HARD },
 };
-int n_jit_opts = sizeof(jit_opts) / sizeof(struct opt_tab);
+int n_jit_opts = sizeof(jit_opts) / sizeof(struct opt_tab);	///< The number of JIT options supported
 
+/**
+ * This table maps PCRE2 BSR options from M strings to C macro values
+ */
 struct opt_tab bsr_opts [] = {
 	{ "PCRE2_BSR_ANYCRLF", PCRE2_BSR_ANYCRLF },
 	{ "PCRE2_BSR_UNICODE", PCRE2_BSR_UNICODE },
 };
-int n_bsr_opts = sizeof(bsr_opts) / sizeof(struct opt_tab);
+int n_bsr_opts = sizeof(bsr_opts) / sizeof(struct opt_tab);	///< The number of BSR options supported
 
+/**
+ * This table maps PCRE2 newline options from M strings to C macro values
+ */
 struct opt_tab newline_opts [] = {
 	{ "PCRE2_NEWLINE_CR", PCRE2_NEWLINE_CR },
 	{ "PCRE2_NEWLINE_LF", PCRE2_NEWLINE_LF },
@@ -100,9 +132,15 @@ struct opt_tab newline_opts [] = {
 	{ "PCRE2_NEWLINE_ANY", PCRE2_NEWLINE_ANY },
 	{ "PCRE2_NEWLINE_NUL", PCRE2_NEWLINE_NUL },
 };
-int n_newline_opts = sizeof(newline_opts) / sizeof(struct opt_tab);
+int n_newline_opts = sizeof(newline_opts) / sizeof(struct opt_tab);	///< The number of newline options supported
 
-/* The parser will allow ORing these with '|', but don't do that */
+/**
+ * This table maps PCRE2 info options for pcre2_pattern_info() from M strings to C macro values
+ *
+ *
+ * The parser will allow ORing these with '|', but unlike other mapping tables, the
+ * C API doesn't support that, so don't do it.
+ */
 struct opt_tab info_opts [] = {
 	{ "PCRE2_INFO_ALLOPTIONS", PCRE2_INFO_ALLOPTIONS },
 	{ "PCRE2_INFO_ARGOPTIONS", PCRE2_INFO_ARGOPTIONS },
@@ -133,14 +171,23 @@ struct opt_tab info_opts [] = {
 	{ "PCRE2_INFO_HEAPLIMIT", PCRE2_INFO_HEAPLIMIT },
 	{ "PCRE2_INFO_EXTRAOPTIONS", PCRE2_INFO_EXTRAOPTIONS },
 };
-int n_info_opts = sizeof(info_opts) / sizeof(struct opt_tab);
+int n_info_opts = sizeof(info_opts) / sizeof(struct opt_tab);		///< The number of info options supported
 
 /*
- * First we have a number of general utility functions that are not exported
+ * This section has a number of utility functions used by the rest of the
+ * plugin code which are not exported to M and not accessible outside of this file.
  */
 
 /**
  * @brief Pcre2 compatibile wrapper for M malloc()
+ *
+ * GT.M would prefer that any plugin C code use the GT.M memory allocator
+ * rather than the system malloc() & free() functions.  Mpcre2 tries to do
+ * this, though it complicates the code some.  This function creates a
+ * PCRE2 signature allocator which wraps the GT.M malloc.
+ *
+ * PCRE2 has a scheme for passing an arbitrary data value to its allocator and
+ * deallocator functions.  This function does not store or use that data.
  *
  * @param size Number of bytes to allocate
  * @param memory_data Unused
@@ -154,8 +201,15 @@ static void *m_pcre2_malloc(PCRE2_SIZE size, void *memory_data) {
 /**
  * @brief Pcre2 compatible wrapper for M free()
  *
+ * This function wraps the GT.M memory deallocator in a
+ * PCRE2 signature.
+ *
+ * PCRE2 has a scheme for passing an arbitrary data value to its allocator and
+ * deallocator functions.  This function does not use that data.
+ *
+ *
  * @param ptr Pointer to memory to free
- * @param Unused
+ * @param memory_data Unused
  *
  * @return None
  */
@@ -166,10 +220,12 @@ static void m_pcre2_free(void *ptr, void *memory_data) {
 
 
 /**
- * @param Decode a string handle into a pointer
+ * @brief Decode a string handle into a pointer
  *
  * We pass pointers out to M as strings, and deode strings from M into pointers.
- * This function does the decode.
+ * This function does the decode.  There is some special casing which translates
+ * the strings "0", or "NULL" into NULL pointers.  Otherwise the string is
+ * assumed to contain a base-10 number which is cast into a void pointer.
  *
  * @param pstr A pointer value encoded as a string handle
  *
@@ -198,10 +254,12 @@ static void *pointer_decode(char *pstr) {
 }
 
 /**
- * @param Encode a pointer as a string handle
+ * @brief Encode a pointer as a string handle
  *
- * Encode a pointer as a string handle to pass out to M
- * 
+ * A pointer is converted to a string representing a decimal number,
+ * ie a pointer holding the value, say, 0x10abc becomes the string
+ * "68284".  This string is written into the caller supplied buffer.
+ *
  * @param ptr The pointer value to encode
  * @param buf String storage
  * @param size Size of storage
@@ -217,14 +275,16 @@ static void pointer_encode(void *ptr, char *buf, int size) {
 }
 
 /*
- * Then we have several functions which do use the PCRE2 API but are not
- * wrappers for PCRE2 functions and are not exported.
+ * In this section we have several functions which do use the PCRE2 API but are not
+ * wrappers for PCRE2 functions and are not exported to M.  In general this is
+ * done to (mostly) transparently use the GT.M memory allocator/deallocator, or
+ * to provide some C support for things not doable from M
  */
 	
 /**
  * @brief Get or create a general context
  *
- * PCRE2 uses the pcre2_general_context * type as the hook for replacing the
+ * PCRE2 uses the pcre2_general_context type as the hook for replacing the
  * system malloc()/free() functions with custom versions.  Since we want to play
  * nice with M, we use this hook to install the M supplied versions.  The practical
  * effect of this is that the first time a pcre2 function that needs to allocate memory
@@ -232,13 +292,14 @@ static void pointer_encode(void *ptr, char *buf, int size) {
  *
  * Future requests for a general context return this one.  The exception is if we are
  * passed an encoded handle from M, in which case we decode it as a pointer.  We don't
- * actually expect this to happen.  Currently the general context created here is not
- * freed, so that's a few bytes the M process will not get back.
+ * actually expect this to happen as we don't provide a mechanism for creating such.
+ * Currently the general context created here is not
+ * freed, so that's a few bytes the M process will never get back from PCRE2.
  *
- * This function is based on an example in the GT.M Programmers Guide, sets us up
+ * This function is based on an example in the GT.M Programmers Guide, and sets us up
  * to use the M malloc() & free() functions, which is recommended for C code
  * called from M.  We could use names if we linked to the callin shared library,
- * but that would be * an additional dependency.
+ * but that would be an additional dependency.
  *
  * @param general_context_str For "0" or "NULL" we create & return (or just return) the static GC.  Otherwise decode as a pointer
  *
@@ -470,7 +531,7 @@ static int parse_pcre2_options(struct opt_tab *option_table, int option_count, c
  * the PCRE2 API, but paper over the differences between M & C
  */
 
-/*
+/**
  * @brief Return an output vector pair
  *
  * Since M cannot directly manipulate output vector pointers, this access function
@@ -703,7 +764,7 @@ gtm_char_t *mpcre2_match_data_create(int count, gtm_long_t ovecsize, gtm_char_t 
  * Otherwise we use our internal general context.
  *
  * @param count Count of parameters from the M API
- * @param code A compiled pcre2 regular expression pointer in string format
+ * @param code_str A compiled pcre2 regular expression pointer in string format
  * @param gcontext_str A custom general context or "0" in string format
  *
  * @return A stringified match data pointer
@@ -737,7 +798,7 @@ gtm_char_t *mpcre2_match_data_create_from_pattern(int count, gtm_char_t *code_st
  * @param code_str A pcre2 compiled regular expression pointer in string format
  * @param subject The string to search for matches
  * @param startoffset The byte offset at which to start the match search
- * @param options Pcre2 match options in string form
+ * @param options_str Pcre2 match options in string form
  * @param match_data_str A Pcre2 match data pointer in string format
  * @param mcontext_str A Pcre2 match context pointer in string format, or "0"
  *
@@ -787,10 +848,10 @@ gtm_long_t mpcre2_match(int count, gtm_char_t *code_str, gtm_string_t *subject,
  * @param code_str A pcre2 compiled regular expression pointer in string format
  * @param subject The string to search for matches
  * @param startoffset The byte offset at which to start the match search
- * @param options Pcre2 match options in string form
+ * @param options_str Pcre2 match options in string form
  * @param match_data_str A Pcre2 match data pointer in string format
  * @param mcontext_str A Pcre2 match context pointer in string format, or "0"
- * @apram wscount Number of entries to create in the workspace vector
+ * @param wscount Number of entries to create in the workspace vector
  *
  * @return < 0 on error or no match, 0 vector offests too small, else one more than the highest numbered capturing pair that has been set
  */
@@ -1108,7 +1169,7 @@ gtm_char_t *mpcre2_compile_context_copy(int count, gtm_char_t *ccontext_str) {
  *
  * @param count Parameter count from the M API
  * @param ccontext_str String handle for a pcre2 compile context
- * @param value_str String form of pcre2 code for handling \R
+ * @param value_str String form of pcre2 code for handling \\R mapping
  *
  * @return 0 on success, non zero on failure
  */
@@ -1138,7 +1199,7 @@ gtm_long_t mpcre2_set_bsr(int count, gtm_char_t *ccontext_str, gtm_char_t *value
  *
  * @return Always returns 0
  */
-gtm_long_t mpcre2_set_character_tables(gtm_char_t *ccontext_str, gtm_char_t *tables_str) {
+gtm_long_t mpcre2_set_character_tables(int count, gtm_char_t *ccontext_str, gtm_char_t *tables_str) {
 
 	pcre2_compile_context *cc;
 	const unsigned char *tables;
@@ -1244,7 +1305,7 @@ gtm_long_t mpcre2_set_parens_nest_limit(int count, gtm_char_t *ccontext_str, gtm
  * @param count Parameter count from the M API
  * @param ccontext_str String handle for a pcre2 compile context
  * @param guard_function_str String handle for a pointer to a guard function
- * @param user_data String handle for a piece of user data
+ * @param user_data_str String handle for a piece of user data
  *
  * @return 0 in all cases
  *
@@ -1548,7 +1609,7 @@ gtm_long_t mpcre2_substring_copy_bynumber(int count, gtm_char_t *match_data_str,
  * pcre2_substring_get_bynumber().
  *
  * @param count Parameter count from the M API
- * @param buffer String handle for the buffer to free
+ * @param buffer_str String handle for the buffer to free
  *
  * @return None
  */
@@ -1642,7 +1703,7 @@ int mpcre2_substring_get_bynumber(int count, gtm_char_t *match_data_str, gtm_lon
  * @param count Parameter count from the M API
  * @param match_data_str String handle for pcre2 match data
  * @param name Name of the capture group
- * @param When to store the length of the capture
+ * @param length Where to store the length of the capture
  *
  * @return 0 on success non-zero otherwise
  */
@@ -1668,7 +1729,7 @@ int mpcre2_substring_get_bynumber(int count, gtm_char_t *match_data_str, gtm_lon
  * @param count Parameter count from the M API
  * @param match_data_str String handle for pcre2 match data
  * @param number Number of the capture group
- * @param When to store the length of the capture
+ * @param length Where to store the length of the capture
  *
  * @return 0 on success non-zero otherwise
  */
@@ -1719,7 +1780,7 @@ gtm_long_t mpcre2_substring_number_from_name(int count, gtm_char_t *code_str, gt
  * @param count Parameter count from the M API
  * @param list_str String handle for a pcre2 substring list
  *
- * @reutnr None
+ * @return None
  *
  */
 void mpcre2_substring_list_free(int count, gtm_char_t *list_str) {
@@ -1772,14 +1833,15 @@ gtm_long_t mpcre2_substring_list_get(int count, gtm_char_t *match_data_str, gtm_
  * @brief Wrap the pcre2_substitute() function
  *
  * @param count M API argument count
- * @param code Handle for a compiled PCRE2 regular expression
+ * @param code_str String handle for a compiled PCRE2 regular expression
  * @param subject The string in which to make the substitution
  * @param startoffset The byte offset in the subject to start checking for substitutions
- * @param options Match options as in pcre2_match()
- * @param match_data Match data handle as in pcre2_match()
- * @param mcontext Pcre2 match context handle
- * @param replacemnt The sting to substitute for matched text
+ * @param options_str Match options as in pcre2_match()
+ * @param match_data_str String handle for match data as in pcre2_match()
+ * @param mcontext_str String handle for Pcre2 match context
+ * @param replacement The string to substitute for matched text
  * @param outputbuffer Where to put the copy of the subject with the replacement(s)
+ * @param outputlengthptr Where to store the length of the copy of the subject with replacement(s)
  *
  * @return The number of substitutions or < 0 on error
  *
@@ -1868,7 +1930,7 @@ gtm_long_t mpcre2_jit_compile(int count, gtm_char_t *code_str, gtm_char_t *optio
  * @param code_str A pcre2 JIT compiled regular expression pointer in string format
  * @param subject The string to search for matches
  * @param startoffset The byte offset at which to start the match search
- * @param options Pcre2 match options in string form
+ * @param options_str Pcre2 match options in string form
  * @param match_data_str A Pcre2 match data pointer in string format
  * @param mcontext_str A Pcre2 match context pointer in string format, or "0"
  *
@@ -2074,8 +2136,6 @@ gtm_long_t mpcre2_serialize_encode(int count, gtm_char_t *codes_str, gtm_long_t 
 	return res;
 }
 
-int32_t pcre2_serialize_encode(const pcre2_code **codes, int32_t number_of_codes, uint8_t **serialized_bytes, PCRE2_SIZE *serialized_size, pcre2_general_context *gcontext);
-
 /**
  * @brief Wrap the void pcre2_serialize_free() function
  *
@@ -2172,6 +2232,7 @@ gtm_char_t *mpcre2_code_copy_with_tables(int count, gtm_char_t *code_str) {
  *
  * @param count M API supplied argument count
  * @param errorcode Code to be mapped to a string
+ * @param buffer M string to hold the output message
  *
  */
 gtm_long_t mpcre2_get_error_message(int count, gtm_long_t errorcode, gtm_string_t *buffer) {
@@ -2190,7 +2251,7 @@ gtm_long_t mpcre2_get_error_message(int count, gtm_long_t errorcode, gtm_string_
 	return res;
 }
 
-/*
+/**
  * @brief Wrap the pcre2_maketables() function
  *
  * @param count The parameter count from the M API
