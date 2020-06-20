@@ -2338,3 +2338,34 @@ gtm_long_t mpcre2_pattern_info(int count, gtm_char_t *code_str, gtm_char_t *what
 			
 	}
 }
+
+/**
+ * @brief Wrap the pcre2_callout_enumerate() function.
+ *
+ * This function is of very limited utilty in an M environment
+ * as it provides a facility to register callback functions for
+ * PCRE2 pattern callouts, but does not provide a facility for
+ * creating such callback functions.  This could be done with
+ * another plugin.
+ *
+ * @param count Parameter count from the M API
+ * @param code_str String handle for a compiled PCRE2 regular expression
+ * @param callback_str String handle for a callback function (which was not created by Mpcre2)
+ * @param user_data_str Handle for arbitrary user data passed to callbacks.
+ * 
+ * @return A bit unclear, but 0 on success and non-zero on error
+ * 
+ */
+ gtm_long_t mpcre2_callout_enumerate(int count, gtm_char_t *code_str, gtm_char_t *callback_str, gtm_char_t *user_data_str) {
+
+ 	pcre2_code *code;
+	typedef int (*callback_t)(pcre2_callout_enumerate_block *, void *);
+	callback_t callback;
+	void *user_data;
+
+	code = (pcre2_code *) pointer_decode(code_str);
+	callback = (callback_t) pointer_decode(callback_str);
+	user_data = (void *) pointer_decode(user_data_str);
+
+	return pcre2_callout_enumerate(code, callback, user_data);
+}
