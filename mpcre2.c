@@ -4,6 +4,48 @@
  * @brief The mpcre2 plugin provides an M interfact to the C pcre2 regular expression library
  *
  */
+
+/**
+ * @mainpage MPCRE2: An M Interface to Libprcre2
+ *
+ * This package provides an M plugin interface to the libpcre2 regular expression C library.
+ * That library provides Perl Compatible Regular Expressions and is hosted at https://www.pcre.org/.
+ * The library is currently on major version 2, and that is the version MPCRE2 supports.
+ *
+ * MPCRE2 has been developed on Ubuntu 18.04.4 LTS x86_64 Linux with the GT.M version supplied by the Ubuntu
+ * package manager, currently 6.3-003a-2.  It should work on any recent versions of GT.M and Linux though that
+ * has not been tested.  I see no reason why it should not work on 32 bit Linux, or even AIX, but have made
+ * no attempt to verify that.
+ *
+ * MPCRE2 is Open Source released under a BSD license.  Feel free to do with it as you will.
+ *
+ * All of the source code for MPCRE2 is contained in the file mpcre2.c.  While this makes for a lengthy
+ * file, each function is generally quite short, and doing it this way, with the function prototypes in the
+ * same file, allows us to avoid requiring a .h file for the package.
+ *
+ * I believe I have provided an M wrapper for every function described in the PCRE2 documentation
+ * at https://www.pcre.org/current/doc/html/pcre2api.html with the exception of those functions marked
+ * as "obsolete".  Some functions are very C specific and would be difficult to use from M without some
+ * additional support.  I have nonetheless provided M wrappers for these functions,
+ * but have not in general provided the extra helper functions that would make them useful.
+ * This work is left as an exercise for the reader.
+ *
+ * The PCRE2 library makes extensive use of C pointers.  The strategy MPCRE2 uses here is to pass pointers
+ * in and out of C as strings formatted as decimal integers equivalent to the pointer values.  This strategy
+ * means these values are visible in M and that an M program could alter these values.  Don't do that.  With
+ * great power comes great responsibility, and it would certainly crash the M runtime.
+ *
+ * The mapping of libpcre2 function names to M is straight-forward but ugly.  Since M identifiers cannot use
+ * underscores and since the libpcre2 function names make extensive use of underscores, an M identifier is
+ * constructed by simply removing all of the underscores.  Thus, for instance, the M identifer for
+ * invoking "pcre2_match_data_free()" is  "pcre2matchdatafree".
+ *
+ * Each wrapped PCRE2 function is documented in the Doxygen reference manual for MPCRE2.  With one exception,
+ * the C parameters are mapped one-to-one to M parameters, so if you are familiar with libpcre2, the M mapping
+ * should be unsurprisng.  The exception is for C parameters which specify the string length of another parameter.
+ * Since M strings are length self-identifying, these length parameters have been dropped in the mapping.
+ * 
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -33,7 +75,7 @@ static char *null_string = "";	///< An empty string used for results
 * This table maps PCRE2 regular expression compile options from M strings
 * to C macro values
 */
-struct opt_tab compile_opts [] = {
+static struct opt_tab compile_opts [] = {
 	{ "PCRE2_ANCHORED", PCRE2_ANCHORED },
 	{ "PCRE2_ALLOW_EMPTY_CLASS", PCRE2_ALLOW_EMPTY_CLASS },
 	{ "PCRE2_ALT_BSUX", PCRE2_ALT_BSUX },
@@ -63,19 +105,19 @@ struct opt_tab compile_opts [] = {
 	{ "PCRE2_USE_OFFSET_LIMIT", PCRE2_USE_OFFSET_LIMIT },
 	{ "PCRE2_UTF", PCRE2_UTF },
 };
-int n_compile_opts = sizeof(compile_opts) / sizeof(struct opt_tab);	///< The number of compile options implemented
+static int n_compile_opts = sizeof(compile_opts) / sizeof(struct opt_tab);	///< The number of compile options implemented
 
 /**
  * This table maps PCRE2 "extra" regular expression compile options
  * from M strings to C macro values
  */
-struct opt_tab extra_compile_opts [] = {
+static struct opt_tab extra_compile_opts [] = {
 	{ "PCRE2_EXTRA_ALLOW_SURROGATE_ESCAPES", PCRE2_EXTRA_ALLOW_SURROGATE_ESCAPES },
 	{ "PCRE2_EXTRA_BAD_ESCAPE_IS_LITERAL", PCRE2_EXTRA_BAD_ESCAPE_IS_LITERAL },
 	{ "PCRE2_EXTRA_MATCH_LINE", PCRE2_EXTRA_MATCH_LINE },
 	{ "PCRE2_EXTRA_MATCH_WORD", PCRE2_EXTRA_MATCH_WORD },
 };
-int n_extra_compile_opts = sizeof(extra_compile_opts) / sizeof(struct opt_tab);	///< The number of extra compile options implemented
+static int n_extra_compile_opts = sizeof(extra_compile_opts) / sizeof(struct opt_tab);	///< The number of extra compile options implemented
 
 /**
  * This table maps PCRE2 match and substitute options from M strings to C macro values
@@ -83,7 +125,7 @@ int n_extra_compile_opts = sizeof(extra_compile_opts) / sizeof(struct opt_tab);	
  * It has both match and substitute options, because pcre2_substitute()
  * takes many of the match options
  */
-struct opt_tab match_opts [] = {
+static struct opt_tab match_opts [] = {
 	{ "PCRE2_ANCHORED", PCRE2_ANCHORED },
 	{ "PCRE2_ENDANCHORED", PCRE2_ENDANCHORED },
 	{ "PCRE2_NOTBOL", PCRE2_NOTBOL },
@@ -100,31 +142,31 @@ struct opt_tab match_opts [] = {
 	{ "PCRE2_SUBSTITUTE_UNKNOWN_UNSET", PCRE2_SUBSTITUTE_UNKNOWN_UNSET },
 	{ "PCRE2_SUBSTITUTE_UNSET_EMPTY", PCRE2_SUBSTITUTE_UNSET_EMPTY },
 };
-int n_match_opts = sizeof(match_opts) / sizeof(struct opt_tab);		///< The number of match and substitute options supported
+static int n_match_opts = sizeof(match_opts) / sizeof(struct opt_tab);		///< The number of match and substitute options supported
 
 /**
  * This table maps PCRE2 Just In Time (JIT) options to from M strings to C macro values
  */
-struct opt_tab jit_opts [] = {
+static struct opt_tab jit_opts [] = {
 	{ "PCRE2_JIT_COMPLETE", PCRE2_JIT_COMPLETE },
 	{ "PCRE2_JIT_PARTIAL_SOFT", PCRE2_JIT_PARTIAL_SOFT },
 	{ "PCRE2_JIT_PARTIAL_HARD", PCRE2_JIT_PARTIAL_HARD },
 };
-int n_jit_opts = sizeof(jit_opts) / sizeof(struct opt_tab);	///< The number of JIT options supported
+static int n_jit_opts = sizeof(jit_opts) / sizeof(struct opt_tab);	///< The number of JIT options supported
 
 /**
  * This table maps PCRE2 BSR options from M strings to C macro values
  */
-struct opt_tab bsr_opts [] = {
+static struct opt_tab bsr_opts [] = {
 	{ "PCRE2_BSR_ANYCRLF", PCRE2_BSR_ANYCRLF },
 	{ "PCRE2_BSR_UNICODE", PCRE2_BSR_UNICODE },
 };
-int n_bsr_opts = sizeof(bsr_opts) / sizeof(struct opt_tab);	///< The number of BSR options supported
+static int n_bsr_opts = sizeof(bsr_opts) / sizeof(struct opt_tab);	///< The number of BSR options supported
 
 /**
  * This table maps PCRE2 newline options from M strings to C macro values
  */
-struct opt_tab newline_opts [] = {
+static struct opt_tab newline_opts [] = {
 	{ "PCRE2_NEWLINE_CR", PCRE2_NEWLINE_CR },
 	{ "PCRE2_NEWLINE_LF", PCRE2_NEWLINE_LF },
 	{ "PCRE2_NEWLINE_CRLF", PCRE2_NEWLINE_CRLF },
@@ -132,7 +174,7 @@ struct opt_tab newline_opts [] = {
 	{ "PCRE2_NEWLINE_ANY", PCRE2_NEWLINE_ANY },
 	{ "PCRE2_NEWLINE_NUL", PCRE2_NEWLINE_NUL },
 };
-int n_newline_opts = sizeof(newline_opts) / sizeof(struct opt_tab);	///< The number of newline options supported
+static int n_newline_opts = sizeof(newline_opts) / sizeof(struct opt_tab);	///< The number of newline options supported
 
 /**
  * This table maps PCRE2 info options for pcre2_pattern_info() from M strings to C macro values
@@ -141,7 +183,7 @@ int n_newline_opts = sizeof(newline_opts) / sizeof(struct opt_tab);	///< The num
  * The parser will allow ORing these with '|', but unlike other mapping tables, the
  * C API doesn't support that, so don't do it.
  */
-struct opt_tab info_opts [] = {
+static struct opt_tab info_opts [] = {
 	{ "PCRE2_INFO_ALLOPTIONS", PCRE2_INFO_ALLOPTIONS },
 	{ "PCRE2_INFO_ARGOPTIONS", PCRE2_INFO_ARGOPTIONS },
 	{ "PCRE2_INFO_BACKREFMAX", PCRE2_INFO_BACKREFMAX },
@@ -171,7 +213,7 @@ struct opt_tab info_opts [] = {
 	{ "PCRE2_INFO_HEAPLIMIT", PCRE2_INFO_HEAPLIMIT },
 	{ "PCRE2_INFO_EXTRAOPTIONS", PCRE2_INFO_EXTRAOPTIONS },
 };
-int n_info_opts = sizeof(info_opts) / sizeof(struct opt_tab);		///< The number of info options supported
+static int n_info_opts = sizeof(info_opts) / sizeof(struct opt_tab);		///< The number of info options supported
 
 /*
  * This section has a number of utility functions used by the rest of the
@@ -375,7 +417,7 @@ static pcre2_general_context *get_general_context (char *general_context_str) {
  * @return a pcre2_compile_context pointer or NULL
  * 
  */
-pcre2_compile_context *get_compile_context(char *context_str, int *must_free) {
+static pcre2_compile_context *get_compile_context(char *context_str, int *must_free) {
 	
 	pcre2_general_context *gc;
 	pcre2_compile_context *cc;
@@ -415,7 +457,7 @@ pcre2_compile_context *get_compile_context(char *context_str, int *must_free) {
  * @return a pcre2_match_context pointer or NULL
  * 
  */
-pcre2_match_context *get_match_context(char *context_str, int *must_free) {
+static pcre2_match_context *get_match_context(char *context_str, int *must_free) {
 	
 	pcre2_general_context *gc;
 	pcre2_match_context *mc;
