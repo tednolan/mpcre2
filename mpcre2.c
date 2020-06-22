@@ -58,9 +58,6 @@
 #include <pcre2.h>
 #include "gtmxc_types.h"
 
-static void* (*malloc_fn)(int);		///< Pointer to GT.M malloc function
-static void (*free_fn)(void*);		///< Pointer to GT.M free function
-
 /**
  * This type is used in tables which translate M strings to C macro values
  */
@@ -68,8 +65,6 @@ typedef struct opt_tab {
 	const char *name;	///< M string
 	uint32_t val;		///< C value mapping
 } opt_tab_t;
-
-static char *null_string = "";	///< An empty string used for results
 
 /**
 * This table maps PCRE2 regular expression compile options from M strings
@@ -231,12 +226,45 @@ static int n_info_opts = sizeof(info_opts) / sizeof(struct opt_tab);		///< The n
  * PCRE2 has a scheme for passing an arbitrary data value to its allocator and
  * deallocator functions.  This function does not store or use that data.
  *
+ * The first time this function is called, it queries the M runtime for the M
+ * malloc function.
+ *
  * @param size Number of bytes to allocate
  * @param memory_data Unused
  * 
  * @return Pointer to allocated memory or NULL on error
  */
 static void *m_pcre2_malloc(PCRE2_SIZE size, void *memory_data) {
+
+	static void* (*malloc_fn)(int) = NULL;
+	void **functable; 
+	unsigned long long start_address;
+	char *start_address_str;
+
+	/*
+	 * If we have not been initialized, have to do some setup
+	 */
+	if (malloc_fn == NULL) {
+ 
+		start_address_str = getenv("GTM_CALLIN_START"); /* set by the M runtime */
+		if (start_address_str == (char *)0) {
+			fprintf(stderr,"GTM_CALLIN_START is not set\n"); 
+			return NULL;
+		} 
+
+		/*
+		 * It seems a safe bet that an unsigned long long is enough bits
+		 * for a pointer type.  We don't use functable unless the strtoull
+		 * "OK" condition is met. (per the man page).
+		 */
+		if (sscanf(start_address_str, "%llu", &start_address) != 1) {
+			fprintf(stderr, "GTM_CALLIN_START is not parsable\n");
+			return NULL;
+		}
+		functable = (void **) start_address;
+		malloc_fn = (void* (*)(int)) functable[4]; 
+	}
+
 	return malloc_fn(size);
 }
 
@@ -249,6 +277,7 @@ static void *m_pcre2_malloc(PCRE2_SIZE size, void *memory_data) {
  * PCRE2 has a scheme for passing an arbitrary data value to its allocator and
  * deallocator functions.  This function does not use that data.
  *
+ * The first time we are called, we initialize the free function from the M runtime.
  *
  * @param ptr Pointer to memory to free
  * @param memory_data Unused
@@ -256,6 +285,32 @@ static void *m_pcre2_malloc(PCRE2_SIZE size, void *memory_data) {
  * @return None
  */
 static void m_pcre2_free(void *ptr, void *memory_data) {
+	typedef void (*free_fn_t)(void *);
+	static free_fn_t free_fn = NULL;
+	void **functable; 
+	unsigned long long start_address;
+	char *start_address_str;
+
+	if (free_fn == NULL) {
+ 
+		start_address_str = getenv("GTM_CALLIN_START"); /* set by the M runtime */
+		if (start_address_str == (char *)0) {
+			fprintf(stderr,"GTM_CALLIN_START is not set\n"); 
+			return;
+		} 
+
+		/*
+		 * It seems a safe bet that an unsigned long long is enough bits
+		 * for a pointer type.  We don't use functable unless the strtoull
+		 * "OK" condition is met. (per the man page).
+		 */
+		if (sscanf(start_address_str, "%llu", &start_address) != 1) {
+			fprintf(stderr, "GTM_CALLIN_START is not parsable\n");
+			return;
+		}
+		functable = (void **) start_address;
+		free_fn = (free_fn_t) functable[5]; 
+	}
 
 	free_fn(ptr);
 }
@@ -349,12 +404,7 @@ static void pointer_encode(void *ptr, char *buf, int size) {
  */
 static pcre2_general_context *get_general_context (char *general_context_str) {
 
-	void **functable; 
-	char *start_address_str;
-	unsigned long long start_address;
 	static pcre2_general_context *default_gc = NULL;
-
-	start_address_str = getenv("GTM_CALLIN_START"); /* set by the M runtime */
 
 	/*
 	 * If they supply "0" or "NULL" use or create the default_gc * else decode it.
@@ -366,31 +416,7 @@ static pcre2_general_context *get_general_context (char *general_context_str) {
 	}
 
 	/*
-	 * We have not been initialized, and have to do some setup
-	 */
- 
-	if (start_address_str == (char *)0) {
-		fprintf(stderr,"GTM_CALLIN_START is not set\n"); 
-		return NULL;
-	} 
-
-	/*
-	 * It seems a safe bet that an unsigned long long is enough bits
-	 * for a pointer type.  We don't use functable unless the strtoull
-	 * "OK" condition is met. (per the man page).
-	 */
-	if (sscanf(start_address_str, "%llu", &start_address) != 1) {
-		fprintf(stderr, "GTM_CALLIN_START is not parsable\n");
-		return NULL;
-	}
-	functable = (void **) start_address;
-
-	malloc_fn = (void* (*)(int)) functable[4]; 
-	free_fn = (void (*)(void*)) functable[5]; 
-
-	/*
-	 * Now that we have our malloc & free functions located,
-	 * we can create our general context
+	 * If we get here we must create our default general context
 	 */
 
 	default_gc = pcre2_general_context_create(m_pcre2_malloc, m_pcre2_free, NULL);
@@ -534,8 +560,9 @@ static int parse_pcre2_options(struct opt_tab *option_table, int option_count, c
 	 * Note that we will set cpt = NULL in some cases, so we need to keep a copy to free
 	 */
 	len = strlen(options);
-	cpt = malloc_fn(len + 1);
+	cpt = m_pcre2_malloc(len + 1, NULL);
 	if (!cpt) {
+		fprintf(stderr, "Can't malloc to parse options!\n");
 		return -1;
 	}
 	save_cpt = cpt;
@@ -554,7 +581,7 @@ static int parse_pcre2_options(struct opt_tab *option_table, int option_count, c
 
 		if (!found) {
 			fprintf(stderr, "Unknown %s option %s\n", opt_tag, token);
-			free_fn(save_cpt);
+			m_pcre2_free(save_cpt, NULL);
 			return -1;
 		}
 
@@ -563,7 +590,7 @@ static int parse_pcre2_options(struct opt_tab *option_table, int option_count, c
 
 	*result = res;
 
-	free_fn(save_cpt);
+	m_pcre2_free(save_cpt, NULL);
 
 	return 0;
 }
@@ -705,7 +732,7 @@ gtm_string_t *mpcre2_get_mstring_from_substring_list(int count, gtm_char_t *list
  * @param erroroffset Output parameter indicating the byte offset of a compile failure
  * @param ccontext_str Compile context for compile, "0" for defaults
  *
- * @return A handle for this compiled pattern or a null string on failure
+ * @return A handle for this compiled pattern or a "0" string on failure
  */
 gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options,
 	gtm_long_t *errorcode, gtm_ulong_t *erroroffset, gtm_char_t *ccontext_str) {
@@ -722,9 +749,9 @@ gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options
 	 * If custom compile option strings are passed in, we must
 	 * map them from string format to internal format
 	 */
-	if ( parse_pcre2_options(compile_opts, n_compile_opts, "compile",
+	if (parse_pcre2_options(compile_opts, n_compile_opts, "compile",
 		options, &compile_options) < 0) {
-		return null_string;
+		return "0";
 	}
 
 
@@ -744,7 +771,7 @@ gtm_char_t *mpcre2_compile(int count, gtm_string_t *pattern, gtm_char_t *options
 	*errorcode = ecode;
 
 	if (!code) {
-		return null_string;
+		return "0";
 	}
 
 	pointer_encode(code, result, sizeof(result));

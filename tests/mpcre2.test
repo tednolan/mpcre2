@@ -1,0 +1,30 @@
+#!/usr/bin/tclsh8.6
+package require tcltest
+namespace import ::tcltest::*
+
+#
+# This short function simply sets the plugin environment variable
+# and invokes mumps to run the desired ".m" file. (Which is
+# actually specified without the trailing ".m")
+#
+proc mexec {mfile} {
+	global env
+
+	set env(GTMXC) "../mpcre2.xc"
+	set env(MPCRE2_SRC) ".."
+	if {! [info exists env(gtmroutines)]} {
+		set env(gtmroutines) "."
+	} else {
+		set env(gtmroutines) ". $env(gtmroutines)"
+	}
+	set res [exec mumps -run $mfile]
+	return $res
+}
+ 
+test pcre2compile {
+    Test: Compiling regular expressions
+} -body {
+    mexec pcre2compile
+} -result 0
+ 
+cleanupTests

@@ -1,0 +1,9 @@
+This test suite assumes that mpcre2.so has been compiled and is in
+the parent directory to this one, along with the mpcre2.xc file.
+It also assumes that the "mumps" command is on PATH.  No mumps
+"globals" are used in testing, so no ".gld" or ".dat" file is 
+needed.
+
+Despite mpcre2 not being Tcl software, the test suite uses tcl
+test, which is assumed to be available.  (Simply loading Tcl
+in most package managers should be sufficient, I believe).

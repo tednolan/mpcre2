@@ -1,0 +1,5 @@
+#!/bin/sh
+export GTMXC=../mpcre2.xc
+export MPCRE2_SRC=..
+export gtmroutines="."
+mumps -run pcre2compile
