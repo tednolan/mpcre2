@@ -26,5 +26,53 @@ test pcre2compile {
 } -body {
     mexec pcre2compile
 } -result 0
+
+test pcre2geterrormessage {
+    Test: Getting error strings from error codes
+} -body {
+    mexec pcre2geterrormessage
+} -result 0
+
+test pcre2codefree {
+    Test: Free storage for a compiled RE
+} -body {
+    mexec pcre2codefree
+} -result 0
+
+test pcre2matchdatacreatefrompattern {
+    Test: Create a match data block from a compiled RE
+} -body {
+    mexec pcre2matchdatacreatefrompattern
+} -result 0
+
+test pcre2match {
+    Test: Match a subject string against an RE
+} -body {
+    mexec pcre2match
+} -result 0
+
+test pcre2dfamatch {
+    Test: Match a subject string against an RE with an alternate algorithm
+} -body {
+    mexec pcre2dfamatch
+} -result 0
+ 
+test pcre2matchdatafree {
+    Test: Free a match data block
+} -body {
+    mexec pcre2matchdatafree
+} -result 0
+ 
+test pcre2substitute {
+    Test: Substitute for a matched pattern
+} -body {
+    mexec pcre2substitute
+} -result 0
+
+test pcre2jitcompile {
+    Test: Compile a regular expression in JIT mode
+} -body {
+    mexec pcre2jitcompile
+} -result 0
  
 cleanupTests
