@@ -9,7 +9,7 @@ pcre2matchdatafree: void mpcre2_match_data_free(I:gtm_char_t*): SIGSAFE
 pcre2substitute: gtm_long_t mpcre2_substitute(I:gtm_char_t*, I:gtm_string_t*, I:gtm_long_t, I:gtm_char_t*, I:gtm_char_t*, I:gtm_char_t*,I:gtm_string_t*,O:gtm_string_t* [1048576],O:gtm_long_t*): SIGSAFE
 pcre2jitcompile: gtm_long_t mpcre2_jit_compile(I:gtm_char_t*, I:gtm_char_t*): SIGSAFE
 pcre2getmark: gtm_string_t* mpcre2_get_mark(I:gtm_char_t*): SIGSAFE
-pcre2getstarchar: gtm_long_t mpcre2_get_startchar(I:gtm_char_t*): SIGSAFE
+pcre2getstartchar: gtm_long_t mpcre2_get_startchar(I:gtm_char_t*): SIGSAFE
 pcre2matchdatacreate: gtm_char_t* mpcre2_match_data_create(I:gtm_long_t, I:gtm_char_t*): SIGSAFE
 pcre2getovectorcount: gtm_long_t mpcre2_get_ovector_count(I:gtm_char_t*) : SIGSAFE
 pcre2getovectorpointer: gtm_char_t *mpcre2_get_ovector_pointer(I:gtm_char_t *) : SIGSAFE

@@ -74,5 +74,17 @@ test pcre2jitcompile {
 } -body {
     mexec pcre2jitcompile
 } -result 0
+
+test pcre2getmark {
+    Test: Get MARK, PRUNE, or *THEN names from match block
+} -body {
+    mexec pcre2getmark
+} -result 0
+ 
+test pcre2getstartchar {
+    Test: Get first character position of a match
+} -body {
+    mexec pcre2getstartchar
+} -result 0
  
 cleanupTests
