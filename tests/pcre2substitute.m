@@ -24,3 +24,4 @@
 	if newlen'=rlen2 write "Multiple replacement length miscalculated: ",newlen,!
 
 	write 0,!
+	quit

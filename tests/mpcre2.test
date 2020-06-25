@@ -86,5 +86,72 @@ test pcre2getstartchar {
 } -body {
     mexec pcre2getstartchar
 } -result 0
+
+test pcre2matchdatacreate {
+    Test: Create PCRE2 match data from a compiled regex
+} -body {
+    mexec pcre2matchdatacreate
+} -result 0
+
+test pcre2getovectorcount {
+    Test: Return number of offset pairs in match data
+} -body {
+    mexec pcre2getovectorcount
+} -result 0
+ 
+test pcre2getovectorpointer {
+    Test: Get pointer to match output vector
+} -body {
+    mexec pcre2getovectorpointer
+} -result 0
+ 
+test pcre2getovpair {
+    Test: Get match data output vector pairs
+} -body {
+    mexec pcre2getovpair
+} -result 0
+
+test pcre2getgeneralcontext {
+    Test: Get the PCRE2 default general context
+} -body {
+    mexec pcre2getgeneralcontext
+} -result 0
+ 
+test pcre2generalcontextcreate {
+    Test: Create a PCRE2 general context
+} -body {
+    mexec pcre2generalcontextcreate
+} -result 0
+ 
+test pcre2generalcontextcopy {
+    Test: Copy a PCRE2 general context
+} -body {
+    mexec pcre2generalcontextcopy
+} -result 0
+
+test pcre2generalcontextfree {
+    Test: Free a PCRE2 general context
+} -body {
+    mexec pcre2generalcontextfree
+} -result 0
+ 
+test pcre2compilecontextcreate {
+    Test: Create a PCRE2 compile context
+} -body {
+    mexec pcre2compilecontextcreate
+} -result 0
+ 
+test pcre2compilecontextcopy {
+    Test: Copy a PCRE2 compile context
+} -body {
+    mexec pcre2compilecontextcopy
+} -result 0
+ 
+test pcre2compilecontextfree {
+    Test: Free a PCRE2 compile context
+} -body {
+    mexec pcre2compilecontextfree
+} -result 0
+ 
  
 cleanupTests

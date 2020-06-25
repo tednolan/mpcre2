@@ -601,10 +601,34 @@ static int parse_pcre2_options(struct opt_tab *option_table, int option_count, c
  */
 
 /**
+ * @brief Get the default MPCRE2 general context
+ *
+ * MPCRE2 creates a default general context which is used behind the scenes.
+ * This general context uses M memory allocation and dallocation.  If this is
+ * needed on the M side we use this function to access it.
+ *
+ * @param count The parameter count from the M API
+ *
+ * @return A string handle for the GC
+ *
+ */
+gtm_char_t *mpcre2_get_general_context(int count) {
+	
+	pcre2_general_context *gc;
+	static char buf[80];
+
+	gc = get_general_context("NULL");
+
+	pointer_encode(gc, buf, sizeof(buf));
+
+	return buf;
+}
+
+/**
  * @brief Return an output vector pair
  *
  * Since M cannot directly manipulate output vector pointers, this access function
- * is needed to take the handle and an index and return the queried ouput
+ * is needed to take the handle and an index and return the queried output
  * vector pair
  *
  * @param count Parameter count provided by the M API

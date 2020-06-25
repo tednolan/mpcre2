@@ -14,6 +14,7 @@ pcre2matchdatacreate: gtm_char_t* mpcre2_match_data_create(I:gtm_long_t, I:gtm_c
 pcre2getovectorcount: gtm_long_t mpcre2_get_ovector_count(I:gtm_char_t*) : SIGSAFE
 pcre2getovectorpointer: gtm_char_t *mpcre2_get_ovector_pointer(I:gtm_char_t *) : SIGSAFE
 pcre2getovpair: void mpcre2_get_ov_pair(I:gtm_char_t*, I:gtm_long_t, O:gtm_long_t*, O:gtm_long_t*): SIGSAFE 
+pcre2getgeneralcontext: gtm_char_t *mpcre2_get_general_context(I:void): SIGSAFE
 pcre2generalcontextcreate: gtm_char_t *mpcre2_general_context_create(I:gtm_char_t*, I:gtm_char_t*, I:gtm_char_t*): SIGSAFE
 pcre2generalcontextcopy: gtm_char_t *mpcre2_general_context_copy(I:gtm_char_t *): SIGSAFE
 pcre2generalcontextfree: void mpcre2_general_context_free(I:gtm_char_t *): SIGSAFE
