@@ -746,7 +746,7 @@ gtm_string_t *mpcre2_get_mstring_from_substring_list(int count, gtm_char_t *list
  * separate parameter. 
  * 
  * In general, refer to the PCRE2 documentation for a fuller description
- * of these parameters.  The handle returned on success will be a base64
+ * of these parameters.  The handle returned on success will be a decimal
  * encoded pointer.
  *
  * @param count M API supplied count of arguments to this function

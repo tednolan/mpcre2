@@ -153,5 +153,46 @@ test pcre2compilecontextfree {
     mexec pcre2compilecontextfree
 } -result 0
  
+test pcre2setbsr {
+    Test: Set convention for \R processing
+} -body {
+    mexec pcre2setbsr
+} -result 0
+
+test pcre2maketables {
+    Test: Builds set of character tables for character code points that are less than 256
+} -body {
+    mexec pcre2maketables
+} -result 0
+
+test pcre2setcharactertables {
+    Test: Sets pointer to custom character tables
+} -body {
+    mexec pcre2setcharactertables
+} -result 0
+ 
+test pcre2setcompileextraoptions {
+    Test: Sets additional  option bits for pcre2compile
+} -body {
+    mexec pcre2setcompileextraoptions
+} -result 0
+
+test pcre2setnewline {
+    Test: Sets the newline convention within a compile context
+} -body {
+    mexec pcre2setnewline
+} -result 0
+ 
+test pcre2setparensnestlimit {
+    Test: Set, in a compile context, the maximum depth of nested parentheses in a pattern
+} -body {
+    mexec pcre2setparensnestlimit
+} -result 0
+
+test pcre2setcompilerecursionguard {
+    Test: Placeholder test for currently untestable set recursion guard function
+} -body {
+    mexec pcre2setcompilerecursionguard
+} -result 0
  
 cleanupTests
