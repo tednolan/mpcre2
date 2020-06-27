@@ -177,6 +177,13 @@ test pcre2setcompileextraoptions {
     mexec pcre2setcompileextraoptions
 } -result 0
 
+test pcre2setmaxpatternlength {
+    Test: Sets the maximum text length of the pattern that can be compiled
+} -body {
+    mexec pcre2setmaxpatternlength
+} -result 0
+
+
 test pcre2setnewline {
     Test: Sets the newline convention within a compile context
 } -body {
@@ -193,6 +200,90 @@ test pcre2setcompilerecursionguard {
     Test: Placeholder test for currently untestable set recursion guard function
 } -body {
     mexec pcre2setcompilerecursionguard
+} -result 0
+
+test pcre2matchcontextcreate {
+    Test: Create and initializes a new match context
+} -body {
+    mexec pcre2matchcontextcreate
+} -result 0
+ 
+test pcre2matchcontextcopy {
+    Test: Copy a match context
+} -body {
+    mexec pcre2matchcontextcopy
+} -result 0
+ 
+test pcre2matchcontextfree {
+    Test: Free a match context
+} -body {
+    mexec pcre2matchcontextfree
+} -result 0
+ 
+test pcre2setcallout {
+    Test: Set a callout function
+} -body {
+    mexec pcre2setcallout
+} -result 0
+ 
+test pcre2setoffsetlimit {
+    Test: Set the offset limit field in a match context
+} -body {
+    mexec pcre2setoffsetlimit
+} -result 0
+
+test pcre2setheaplimit {
+    Test: Set the backtracking heap limit field in a match context
+} -body {
+    mexec pcre2setheaplimit
+} -result 0
+
+test pcre2setmatchlimit {
+    Test: Set the match limit field in a match context
+} -body {
+    mexec pcre2setmatchlimit
+} -result 0
+ 
+test pcre2setdepthlimit {
+    Test: Set the backtracking depth limit field in a match context
+} -body {
+    mexec pcre2setdepthlimit
+} -result 0
+ 
+test pcre2substringcopybyname {
+    Test: Extract a captured substring, identified by name, into a given buffer
+} -body {
+    mexec pcre2substringcopybyname
+} -result 0
+
+test pcre2substringcopybynumber {
+    Test: Extract a captured substring, identified by number, into a given buffer
+} -body {
+    mexec pcre2substringcopybynumber
+} -result 0
+ 
+test pcre2substringgetbyname {
+    Test: Extract a captured substring, identified by name, into a new buffer
+} -body {
+    mexec pcre2substringgetbyname
+} -result 0
+ 
+test pcre2substringgetbynumber {
+    Test: Extract a captured substring, identified by number, into a new buffer
+} -body {
+    mexec pcre2substringgetbynumber
+} -result 0
+
+test pcre2getmstringfrombuf {
+    Test: Get an M string from a C buffer
+} -body {
+    mexec pcre2getmstringfrombuf
+} -result 0
+ 
+test pcre2substringfree {
+    Test: Free a C buffer with a newly allocated substring
+} -body {
+    mexec pcre2substringfree
 } -result 0
  
 cleanupTests
