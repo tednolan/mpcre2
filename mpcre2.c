@@ -694,13 +694,13 @@ gtm_long_t mpcre2_get_substring_list_count(int count, gtm_char_t *listptr_str) {
 	if (!listptr[0])
 		return 0;
 
-	for(i = 0;; ++i) {
+	for(i = 1;; ++i) {
 		cpt = listptr[i];
 		if (!cpt)
 			break;
 	}
 
-	return i-1;
+	return i;
 }
 
 /**
@@ -1890,6 +1890,8 @@ void mpcre2_substring_list_free(int count, gtm_char_t *list_str) {
  *
  * To be useful from M, this function must be used in conjunction with the
  * utilitiy functions pcre2_get_substring_list_count() & pcre2_get_mstring_from_substring_list().
+ *
+ * On the C side, we can pass NULL for lengthsptr.  We don't accept that here.
  *
  * @param count Parameter count from the M API
  * @param match_data_str String handle for pcre2 match data

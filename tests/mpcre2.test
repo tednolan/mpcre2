@@ -285,5 +285,47 @@ test pcre2substringfree {
 } -body {
     mexec pcre2substringfree
 } -result 0
+
+test pcre2substringlengthbyname {
+    Test: Return length of a matched substring identified by name
+} -body {
+    mexec pcre2substringlengthbyname
+} -result 0
+ 
+test pcre2substringlengthbynumber {
+    Test: Return length of a matched substring identified by number
+} -body {
+    mexec pcre2substringlengthbynumber
+} -result 0
+ 
+test pcre2substringnumberfromname {
+    Test: Map a named match substring to a matched substring number
+} -body {
+    mexec pcre2substringnumberfromname
+} -result 0
+
+test pcre2substringlistget {
+    Test: Extracting all the captured substrings after a pattern match
+} -body {
+    mexec pcre2substringlistget
+} -result 0
+ 
+test pcre2substringlistcount {
+    Test: Count all the extracted captured substrings after a pattern match
+} -body {
+    mexec pcre2substringlistcount
+} -result 0
+ 
+test pcre2mstringfromsubstringlist {
+    Test: Get an M string from a C buffer entry
+} -body {
+    mexec pcre2mstringfromsubstringlist
+} -result 0
+
+test pcre2substringlistfree {
+    Test: Free C buffer of captured substrings
+} -body {
+    mexec pcre2substringlistfree
+} -result 0
  
 cleanupTests
