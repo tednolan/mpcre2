@@ -1,0 +1,6 @@
+The MPCRE2 package is a plugin which should work on recent versions
+of GT.M.  It provides M wrappers for the PCRE2 regular expression library.
+
+There are more details in the provided refman.pdf
+
+This package is provided under a BSD license.  Do with it as you will.

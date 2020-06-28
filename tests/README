@@ -1,9 +1,22 @@
-This test suite assumes that mpcre2.so has been compiled and is in
-the parent directory to this one, along with the mpcre2.xc file.
-It also assumes that the "mumps" command is on PATH.  No mumps
-"globals" are used in testing, so no ".gld" or ".dat" file is 
-needed.
+This test suite assumes that mpcre2.so has been compiled and is in the
+parent directory to this one, along with the mpcre2.xc file.  It also
+assumes that the "mumps" command is on PATH.  No mumps "globals" are
+used in testing, so no ".gld" or ".dat" file is needed.
 
-Despite mpcre2 not being Tcl software, the test suite uses tcl
-test, which is assumed to be available.  (Simply loading Tcl
-in most package managers should be sufficient, I believe).
+Despite mpcre2 not being Tcl software, the test suite uses the tcltest
+framework, which is assumed to be available.  (Simply loading Tcl in
+most package managers should be sufficient, I believe).
+
+There is a test for every function in the .xc file.  However for
+functions that need unimplemented helper functions or glue code,
+the test is just a null "success".
+
+The tests which *are* implemented, could obviously be much extended
+and improved.
+
+To run the tests either:
+
+	tclsh8.6 mpcre2.test
+
+or
+	make tests
