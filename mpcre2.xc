@@ -62,4 +62,4 @@ pcre2codecopy: gtm_char_t *mpcre2_code_copy(I:gtm_char_t *): SIGSAFE
 pcre2codecopywithtables: gtm_char_t *mpcre2_code_copy_with_tables(I:gtm_char_t *): SIGSAFE
 pcre2maketables: gtm_char_t *mpcre2_maketables(I:gtm_char_t *): SIGSAFE
 pcre2patterninfo: gtm_long_t mpcre2_pattern_info(I:gtm_char_t *, I:gtm_char_t *, O:gtm_string_t * [80])
-mpcre2calloutenumerate: gtm_long_t mpcre2_callout_enumerate(I:gtm_char_t *, I:gtm_char_t *, I:gtm_char_t *): SIGSAFE 
+pcre2calloutenumerate: gtm_long_t mpcre2_callout_enumerate(I:gtm_char_t *, I:gtm_char_t *, I:gtm_char_t *): SIGSAFE 

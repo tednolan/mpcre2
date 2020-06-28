@@ -328,4 +328,87 @@ test pcre2substringlistfree {
     mexec pcre2substringlistfree
 } -result 0
  
+test pcre2jitmatch {
+    Test: String matching with JIT compiled regex
+} -body {
+    mexec pcre2jitmatch
+} -result 0
+ 
+test pcre2jitfreeunusedmemory {
+    Test: Free memory used by the JIT system
+} -body {
+    mexec pcre2jitfreeunusedmemory
+} -result 0
+ 
+test pcre2jitstackcreate {
+    Test: Create a JIT stack
+} -body {
+    mexec pcre2jitstackcreate
+} -result 0
+
+test pcre2jitstackassign {
+    Test: Assign a JIT stack
+} -body {
+    mexec pcre2jitstackassign
+} -result 0
+ 
+test pcre2jitstackfree {
+    Test: Free a JIT stack
+} -body {
+    mexec pcre2jitstackfree
+} -result 0
+ 
+# Not a real test
+test pcre2serializedecode {
+    Test: Decode a list of compiled patterns from a byte stream
+} -body {
+    mexec pcre2serializedecode
+} -result 0
+ 
+# Not a real test
+test pcre2serializeencode {
+    Test: Encode a list of compiled patterns into a byte stream
+} -body {
+    mexec pcre2serializeencode
+} -result 0
+ 
+# Not a real test
+test pcre2serializefree {
+    Test: Free the memory that was obtained by pcre2_serialize_encode
+} -body {
+    mexec pcre2serializefree
+} -result 0
+ 
+# Not a real test
+test pcre2serializegetnumberofcodes {
+    Test: Get the number of serialized patterns in a byte stream
+} -body {
+    mexec pcre2serializegetnumberofcodes
+} -result 0
+ 
+test pcre2codecopy {
+    Test: Copy compiled regex code
+} -body {
+    mexec pcre2codecopy
+} -result 0
+ 
+test pcre2codecopywithtables {
+    Test: Copy compiled regex code with character tables
+} -body {
+    mexec pcre2codecopywithtables
+} -result 0
+ 
+test pcre2patterninfo {
+    Test: Return information about a compiled pattern
+} -body {
+    mexec pcre2patterninfo
+} -result 0
+ 
+# Not a real test
+test pcre2calloutenumerate {
+    Test: Scan a compiled regular expression and calls the callback() function for each callout
+} -body {
+    mexec pcre2calloutenumerate
+} -result 0
+ 
 cleanupTests
